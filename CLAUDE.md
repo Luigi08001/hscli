@@ -15,8 +15,18 @@ When performing bulk operations against the HubSpot API (batch creates, imports,
 4. **Rate limit awareness**: HubSpot enforces 10-second rolling limits (~100 req/10s for private apps). Use sequential processing with throttle pauses (1-2s per 5 records), not large parallel batches.
 5. **Idempotent re-runs**: Seed scripts must check for existing records before creating duplicates.
 
+### Record Owner Rule
+When creating any CRM record (contacts, companies, deals, tickets, custom objects), **always ask for the record owner** before proceeding. Owner assignment is required for:
+- Data quality and portal health
+- Correct routing of notifications and tasks
+- Accurate reporting and pipeline visibility
+- Brand/team segmentation (e.g., LvnCLI → Louis, MCP_LVN → Gonzalo)
+
+Never create records without an explicit owner. If bulk-creating records, confirm the owner assignment logic (per-brand, round-robin, etc.) with the user first.
+
 ### Missing Information Rule
 When creating HubSpot objects (companies, custom objects, contacts), if required fields or configuration choices are ambiguous, **ask the user before proceeding**. Never guess at business-specific values like:
+- Record owner (see Record Owner Rule above)
 - Company details (industry, type, revenue)
 - Custom object schemas (field names, types, associations)
 - Pipeline stages and probabilities
