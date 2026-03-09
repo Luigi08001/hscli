@@ -1,5 +1,48 @@
 # CLAUDE.md — hubcli project rules
 
+## hubcli vs HubSpot CLI (@hubspot/cli)
+
+These are **two separate CLIs** that serve different purposes:
+
+| | **hubcli** (this project) | **HubSpot CLI (`hs`)** |
+|---|---|---|
+| **Package** | `hubcli` (local) | `@hubspot/cli` (npm) |
+| **Binary** | `hubcli` | `hs` |
+| **Focus** | CRM data operations (CRUD, search, pipelines, properties, associations) | Developer tooling (projects, CMS, themes, UI extensions, serverless) |
+| **Auth** | Private App Token (`pat-*`) stored in `~/.hubcli/auth.json` | Personal Access Key stored in `~/.hscli/config.yml` |
+| **MCP** | Built-in MCP server (`hubcli mcp`) | No MCP support |
+| **Write safety** | Dry-run by default, requires `--force` | Direct execution |
+
+### Installing hubcli
+```bash
+# From source (development)
+git clone <repo> && cd hubcli-main
+npm install && npm run build
+# Use directly:
+node dist/cli.js <command>
+# Or link globally:
+npm link
+
+# Auth with Private App Token
+hubcli auth login --token "<pat-eu1-...>"
+```
+
+### Installing HubSpot CLI
+```bash
+npm install -g @hubspot/cli
+# Or as dev dependency (used in this project):
+npm install --save-dev @hubspot/cli
+
+# Auth with Personal Access Key (generated in HubSpot UI)
+hs account auth --pak="<personal-access-key>"
+```
+
+### When to use which
+- **hubcli**: CRM record CRUD, bulk operations, search, pipelines, properties, associations, MCP integration
+- **hs CLI**: HubSpot Projects (UI extensions, CRM cards), CMS content, themes, serverless functions, developer tooling
+
+Both CLIs can coexist. hubcli uses `~/.hubcli/` for config; hs uses `~/.hscli/`.
+
 ## Build & Test
 - Build: `npm run build` (TypeScript → dist/)
 - Run CLI: `node --input-type=module -e "import { createProgram } from './dist/cli.js'; ..."`
