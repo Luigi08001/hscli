@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { HubSpotClient, createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { printResult } from "../../core/output.js";
 import { ASSOCIATION_OBJECT_TYPES, encodePathSegment, maybeWrite, parseNumberFlag, parseSupportedObjectType } from "./shared.js";
@@ -17,7 +17,7 @@ export function registerAssociations(crm: Command, getCtx: () => CliContext): vo
     .option("--after <cursor>", "Paging cursor")
     .action(async (fromObjectType, fromObjectId, toObjectType, opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const fromObjectTypeValue = parseSupportedObjectType(fromObjectType, ASSOCIATION_OBJECT_TYPES, "fromObjectType");
       const toObjectTypeValue = parseSupportedObjectType(toObjectType, ASSOCIATION_OBJECT_TYPES, "toObjectType");
       const fromObjectTypeSegment = encodePathSegment(fromObjectTypeValue, "fromObjectType");
@@ -39,7 +39,7 @@ export function registerAssociations(crm: Command, getCtx: () => CliContext): vo
     .argument("<toObjectId>")
     .action(async (fromObjectType, fromObjectId, toObjectType, toObjectId) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const fromObjectTypeValue = parseSupportedObjectType(fromObjectType, ASSOCIATION_OBJECT_TYPES, "fromObjectType");
       const toObjectTypeValue = parseSupportedObjectType(toObjectType, ASSOCIATION_OBJECT_TYPES, "toObjectType");
       const fromObjectTypeSegment = encodePathSegment(fromObjectTypeValue, "fromObjectType");
@@ -59,7 +59,7 @@ export function registerAssociations(crm: Command, getCtx: () => CliContext): vo
     .argument("<toObjectId>")
     .action(async (fromObjectType, fromObjectId, toObjectType, toObjectId) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const fromObjectTypeValue = parseSupportedObjectType(fromObjectType, ASSOCIATION_OBJECT_TYPES, "fromObjectType");
       const toObjectTypeValue = parseSupportedObjectType(toObjectType, ASSOCIATION_OBJECT_TYPES, "toObjectType");
       const fromObjectTypeSegment = encodePathSegment(fromObjectTypeValue, "fromObjectType");

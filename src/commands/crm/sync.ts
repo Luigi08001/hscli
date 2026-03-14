@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { Command } from "commander";
 import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { HubSpotClient, createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { CliError, printResult } from "../../core/output.js";
 import { encodePathSegment, parseNumberFlag } from "./shared.js";
@@ -38,7 +38,7 @@ export function registerSync(crm: Command, getCtx: () => CliContext): void {
     .option("--max-pages <n>", "Maximum pages per run", "5")
     .action(async (objectType, opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const objectTypeSegment = encodePathSegment(objectType, "objectType");
       const limit = parseNumberFlag(opts.limit, "--limit");
       const maxPages = parseNumberFlag(opts.maxPages, "--max-pages");

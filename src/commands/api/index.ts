@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { HubSpotClient, createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { CliError, printResult } from "../../core/output.js";
 import { maybeWrite, parseJsonPayload } from "../crm/shared.js";
@@ -26,7 +26,7 @@ export function registerApi(program: Command, getCtx: () => CliContext): void {
     .option("--data <payload>", "JSON payload for write/read body")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const method = parseMethod(opts.method);
       const path = String(opts.path).trim();
       const body = opts.data !== undefined ? parseJsonPayload(opts.data) : undefined;

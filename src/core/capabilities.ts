@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getHubcliHomeDir, getProfile, saveProfile } from "./auth.js";
+import { getHubcliHomeDir, getProfile, saveProfile, getApiBaseUrl } from "./auth.js";
 import { CliError } from "./output.js";
 
 type ProbeMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -555,10 +555,10 @@ export function recordEndpointSuccess(options: { profile: string; path: string; 
   recordCapability(options.profile, definition.id, options.statusCode, "runtime-success");
 }
 
-async function probeCapability(token: string, definition: EndpointCapabilityDefinition): Promise<CachedCapabilityStatus> {
+async function probeCapability(token: string, definition: EndpointCapabilityDefinition, apiBaseUrl = "https://api.hubapi.com"): Promise<CachedCapabilityStatus> {
   const checkedAt = new Date().toISOString();
   try {
-    const response = await fetch(`https://api.hubapi.com${definition.probePath}`, {
+    const response = await fetch(`${apiBaseUrl}${definition.probePath}`, {
       method: definition.probeMethod,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -650,7 +650,7 @@ export async function probeCapabilities(options: {
 
   const capabilityResults: Record<string, CachedCapabilityStatus> = {};
   for (const definition of ENDPOINT_CAPABILITIES) {
-    capabilityResults[definition.id] = await probeCapability(options.token, definition);
+    capabilityResults[definition.id] = await probeCapability(options.token, definition, getApiBaseUrl(options.profile));
   }
 
   const updatedEntry: CapabilityCacheEntry = {

@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { getToken } from "../core/auth.js";
+import { getToken, getApiBaseUrl } from "../core/auth.js";
 import { HubSpotClient } from "../core/http.js";
 import { CliError, redactSensitive, type CliContext } from "../core/output.js";
 import {
@@ -81,6 +81,7 @@ async function executeTool(args: McpBaseArgs, fn: (ctx: CliContext, client: HubS
     const client = new HubSpotClient(getToken(ctx.profile), {
       profile: ctx.profile,
       strictCapabilities: isEnvTrue(process.env.HUBCLI_MCP_STRICT_CAPABILITIES),
+      apiBaseUrl: getApiBaseUrl(ctx.profile),
     });
     const result = await fn(ctx, client);
     return textResult(result);

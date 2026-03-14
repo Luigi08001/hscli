@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { HubSpotClient } from "../../core/http.js";
-import { getProfile, getToken, hasProfile, listProfiles, removeToken, saveProfile, saveToken } from "../../core/auth.js";
+import { getProfile, getToken, hasProfile, listProfiles, removeToken, saveProfile, saveToken, detectHublet, resolveApiDomain } from "../../core/auth.js";
 import type { CliContext } from "../../core/output.js";
 import { CliError, printResult } from "../../core/output.js";
 
@@ -80,13 +80,18 @@ export function registerAuth(program: Command, getCtx: () => CliContext): void {
       const token = resolveLoginToken(opts);
       saveToken(profile, token);
       const details = await fetchPortalDetails(token);
+      // Auto-detect hublet and resolve API domain
+      const hublet = detectHublet({ token, uiDomain: details.uiDomain });
+      const apiDomain = resolveApiDomain(hublet);
       if (details.portalId || details.uiDomain) {
-        saveProfile(profile, { token, ...details });
+        saveProfile(profile, { token, ...details, hublet, apiDomain });
       }
       printResult(ctx, {
         message: `Token saved for profile '${profile}'`,
         portalId: details.portalId ?? null,
         uiDomain: details.uiDomain ?? null,
+        hublet: hublet ?? "na",
+        apiDomain,
       });
     });
 
