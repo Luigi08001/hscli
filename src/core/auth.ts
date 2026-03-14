@@ -10,6 +10,53 @@ export interface AuthProfile {
   scopes?: string[];
   portalId?: string;
   uiDomain?: string;
+  apiDomain?: string;
+  hublet?: string;
+}
+
+/**
+ * Detect the hublet from available profile data.
+ * Priority: explicit hublet field > uiDomain > token prefix.
+ */
+export function detectHublet(profile: Partial<AuthProfile>): string | undefined {
+  if (profile.hublet) return profile.hublet;
+
+  // Detect from uiDomain (e.g. "app-eu1.hubspot.com" → "eu1")
+  if (profile.uiDomain) {
+    const match = profile.uiDomain.match(/^app-([a-z0-9]+)\./);
+    if (match) return match[1];
+  }
+
+  // Detect from token prefix (e.g. "pat-eu1-..." → "eu1")
+  if (profile.token) {
+    const tokenMatch = profile.token.match(/^pat-([a-z0-9]+)-/);
+    if (tokenMatch && tokenMatch[1] !== "na1") return tokenMatch[1];
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolve the HubSpot API base domain for a given hublet.
+ * NA/default → "api.hubapi.com", EU1 → "api-eu1.hubapi.com", etc.
+ */
+export function resolveApiDomain(hublet?: string): string {
+  if (!hublet) return "api.hubapi.com";
+  return `api-${hublet}.hubapi.com`;
+}
+
+/**
+ * Get the API base URL for a profile (hublet-aware).
+ */
+export function getApiBaseUrl(profile: string): string {
+  try {
+    const data = getProfile(profile);
+    if (data.apiDomain) return `https://${data.apiDomain}`;
+    const hublet = detectHublet(data);
+    return `https://${resolveApiDomain(hublet)}`;
+  } catch {
+    return "https://api.hubapi.com";
+  }
 }
 
 interface AuthFile {

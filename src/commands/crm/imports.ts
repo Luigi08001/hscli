@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { HubSpotClient, createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { printResult } from "../../core/output.js";
 import { encodePathSegment, maybeWrite, parseJsonPayload, parseNumberFlag } from "./shared.js";
@@ -13,7 +13,7 @@ export function registerImports(crm: Command, getCtx: () => CliContext): void {
     .requiredOption("--data <payload>", "Import payload JSON")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/crm/v3/imports", payload);
       printResult(ctx, res);
@@ -25,7 +25,7 @@ export function registerImports(crm: Command, getCtx: () => CliContext): void {
     .option("--after <cursor>", "Paging cursor")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
@@ -35,7 +35,7 @@ export function registerImports(crm: Command, getCtx: () => CliContext): void {
 
   imports.command("get").argument("<importId>").action(async (importId) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const importIdSegment = encodePathSegment(importId, "importId");
     const res = await client.request(`/crm/v3/imports/${importIdSegment}`);
     printResult(ctx, res);
@@ -43,7 +43,7 @@ export function registerImports(crm: Command, getCtx: () => CliContext): void {
 
   imports.command("errors").argument("<importId>").action(async (importId) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const importIdSegment = encodePathSegment(importId, "importId");
     const res = await client.request(`/crm/v3/imports/${importIdSegment}/errors`);
     printResult(ctx, res);

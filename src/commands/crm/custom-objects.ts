@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { HubSpotClient, createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { printResult } from "../../core/output.js";
 import { encodePathSegment, maybeWrite, parseJsonPayload, parseNumberFlag } from "./shared.js";
@@ -12,21 +12,21 @@ export function registerCustomObjects(crm: Command, getCtx: () => CliContext): v
 
   schemas.command("list").action(async () => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const res = await client.request("/crm/v3/schemas");
     printResult(ctx, res);
   });
 
   schemas.command("get").argument("<objectType>").action(async (objectType) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const res = await client.request(`/crm/v3/schemas/${encodePathSegment(objectType, "objectType")}`);
     printResult(ctx, res);
   });
 
   schemas.command("create").requiredOption("--data <payload>", "Schema payload JSON").action(async (opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "POST", "/crm/v3/schemas", payload);
     printResult(ctx, res);
@@ -34,7 +34,7 @@ export function registerCustomObjects(crm: Command, getCtx: () => CliContext): v
 
   schemas.command("update").argument("<objectType>").requiredOption("--data <payload>", "Schema payload JSON").action(async (objectType, opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "PATCH", `/crm/v3/schemas/${encodePathSegment(objectType, "objectType")}`, payload);
     printResult(ctx, res);
@@ -49,7 +49,7 @@ export function registerCustomObjects(crm: Command, getCtx: () => CliContext): v
     .option("--after <cursor>", "Paging cursor")
     .action(async (objectType, opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
@@ -59,14 +59,14 @@ export function registerCustomObjects(crm: Command, getCtx: () => CliContext): v
 
   records.command("get").argument("<objectType>").argument("<id>").action(async (objectType, id) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const res = await client.request(`/crm/v3/objects/${encodePathSegment(objectType, "objectType")}/${encodePathSegment(id, "id")}`);
     printResult(ctx, res);
   });
 
   records.command("search").argument("<objectType>").requiredOption("--data <payload>", "Search payload JSON").action(async (objectType, opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await client.request(`/crm/v3/objects/${encodePathSegment(objectType, "objectType")}/search`, { method: "POST", body: payload });
     printResult(ctx, res);
@@ -74,7 +74,7 @@ export function registerCustomObjects(crm: Command, getCtx: () => CliContext): v
 
   records.command("create").argument("<objectType>").requiredOption("--data <payload>", "Record payload JSON").action(async (objectType, opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "POST", `/crm/v3/objects/${encodePathSegment(objectType, "objectType")}`, payload);
     printResult(ctx, res);
@@ -82,7 +82,7 @@ export function registerCustomObjects(crm: Command, getCtx: () => CliContext): v
 
   records.command("update").argument("<objectType>").argument("<id>").requiredOption("--data <payload>", "Record payload JSON").action(async (objectType, id, opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "PATCH", `/crm/v3/objects/${encodePathSegment(objectType, "objectType")}/${encodePathSegment(id, "id")}`, payload);
     printResult(ctx, res);
@@ -90,7 +90,7 @@ export function registerCustomObjects(crm: Command, getCtx: () => CliContext): v
 
   records.command("delete").argument("<objectType>").argument("<id>").action(async (objectType, id) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const res = await maybeWrite(ctx, client, "DELETE", `/crm/v3/objects/${encodePathSegment(objectType, "objectType")}/${encodePathSegment(id, "id")}`);
     printResult(ctx, res);
   });

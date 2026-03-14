@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { HubSpotClient, createClient } from "../../core/http.js";
 import { enforceWritePolicy } from "../../core/policy.js";
 import type { CliContext } from "../../core/output.js";
 import { CliError, printResult } from "../../core/output.js";
@@ -102,7 +102,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
     .option("--properties <csv>", "Properties CSV")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const portal = resolvePortalContext(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
@@ -118,7 +118,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("get").argument("<id>").option("--properties <csv>", "Properties CSV").action(async (id, opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const portal = resolvePortalContext(ctx.profile);
     const idSegment = encodePathSegment(id, "id");
     const suffix = opts.properties ? `?properties=${encodeURIComponent(opts.properties)}` : "";
@@ -129,7 +129,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("search").requiredOption("--query <text>", "Free text query").option("--limit <n>", "Max records", "10").option("--after <n>", "Paging offset").action(async (opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const portal = resolvePortalContext(ctx.profile);
     const body: Record<string, unknown> = { query: opts.query, limit: parseNumberFlag(opts.limit, "--limit") };
     if (opts.after !== undefined) {
@@ -145,7 +145,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("create").requiredOption("--data <payload>", "HubSpot object payload JSON").action(async (opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const portal = resolvePortalContext(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "POST", `/crm/v3/objects/${objectType}`, payload);
@@ -155,7 +155,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("update").argument("<id>").requiredOption("--data <payload>", "HubSpot update payload JSON").action(async (id, opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const portal = resolvePortalContext(ctx.profile);
     const idSegment = encodePathSegment(id, "id");
     const payload = parseJsonPayload(opts.data);
@@ -166,7 +166,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("delete").argument("<id>").description("Archive/delete one record").action(async (id) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const idSegment = encodePathSegment(id, "id");
     const res = await maybeWrite(ctx, client, "DELETE", `/crm/v3/objects/${objectType}/${idSegment}`);
     printResult(ctx, res);
@@ -174,7 +174,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("merge").requiredOption("--data <payload>", "Merge payload JSON").description("Merge records (endpoint support varies by object)").action(async (opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "POST", `/crm/v3/objects/${objectType}/merge`, payload);
     printResult(ctx, res);
@@ -182,7 +182,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("batch-read").requiredOption("--data <payload>", "Batch read payload JSON").action(async (opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await client.request(`/crm/v3/objects/${objectType}/batch/read`, { method: "POST", body: payload });
     printResult(ctx, res);
@@ -190,7 +190,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("batch-upsert").requiredOption("--data <payload>", "Batch upsert payload JSON").action(async (opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "POST", `/crm/v3/objects/${objectType}/batch/upsert`, payload);
     printResult(ctx, res);
@@ -198,7 +198,7 @@ export function registerObjectCommands(parent: Command, objectType: string, getC
 
   cmd.command("batch-archive").requiredOption("--data <payload>", "Batch archive payload JSON").action(async (opts) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "POST", `/crm/v3/objects/${objectType}/batch/archive`, payload);
     printResult(ctx, res);

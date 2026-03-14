@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getHubcliHomeDir, getProfile } from "./auth.js";
+import { getHubcliHomeDir, getProfile, getApiBaseUrl } from "./auth.js";
 import { HubSpotClient } from "./http.js";
 import { CliError } from "./output.js";
 
@@ -208,7 +208,7 @@ async function fetchCrmObjectSchema(options: {
   token: string;
   objectType: string;
 }): Promise<CrmObjectSchema> {
-  const client = new HubSpotClient(options.token, { profile: options.profile });
+  const client = new HubSpotClient(options.token, { profile: options.profile, apiBaseUrl: getApiBaseUrl(options.profile) });
   const objectTypeSegment = encodePathSegment(options.objectType, "objectType");
 
   const propertiesResponse = await client.request(`/crm/v3/properties/${objectTypeSegment}`);

@@ -2,6 +2,17 @@ import { CliError } from "./output.js";
 import { appendFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { mapEndpointAvailabilityError, preflightEndpointCapability, recordEndpointSuccess } from "./capabilities.js";
+import { getToken, getApiBaseUrl } from "./auth.js";
+
+/**
+ * Create a HubSpotClient that is hublet-aware.
+ * Automatically resolves the API base URL from the profile's hublet setting.
+ */
+export function createClient(profile: string, options: Omit<HubSpotClientOptions, "apiBaseUrl"> = {}): HubSpotClient {
+  const token = getToken(profile);
+  const apiBaseUrl = getApiBaseUrl(profile);
+  return new HubSpotClient(token, { ...options, apiBaseUrl, profile });
+}
 
 export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -14,6 +25,8 @@ interface HubSpotClientOptions {
   telemetryFile?: string;
   profile?: string;
   strictCapabilities?: boolean;
+  /** Override the API base URL (e.g. "https://api-eu1.hubapi.com" for EU1 portals). */
+  apiBaseUrl?: string;
 }
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -59,7 +72,7 @@ interface RateLimitSnapshot {
 }
 
 export class HubSpotClient {
-  private readonly baseUrl = new URL("https://api.hubapi.com");
+  private readonly baseUrl: URL;
   private readonly requestId: string;
   private readonly telemetryFile?: string;
   private readonly profile: string;
@@ -67,6 +80,7 @@ export class HubSpotClient {
   private readonly rateLimitState: RateLimitSnapshot = { nextRequestAtMs: 0 };
 
   constructor(private readonly token: string, options: HubSpotClientOptions = {}) {
+    this.baseUrl = new URL(options.apiBaseUrl?.trim() || "https://api.hubapi.com");
     this.requestId = options.requestId?.trim() || process.env.HUBCLI_REQUEST_ID?.trim() || randomUUID();
     this.telemetryFile = options.telemetryFile?.trim() || process.env.HUBCLI_TELEMETRY_FILE?.trim() || undefined;
     this.profile = options.profile?.trim() || process.env.HUBCLI_PROFILE?.trim() || "default";
