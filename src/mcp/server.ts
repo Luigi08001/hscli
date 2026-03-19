@@ -519,6 +519,252 @@ export function registerHubSpotTools(server: McpServer): void {
     }
     return maybeWrite(ctx, client, method, args.path, args.data);
   }));
+
+  // ── Lists ──────────────────────────────────────────────────────────────
+
+  server.registerTool("crm_lists_list", {
+    description: "List CRM lists with pagination",
+    inputSchema: {
+      ...baseArgsSchema,
+      limit: z.number().min(1).max(250).optional(),
+      after: z.string().optional(),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const params = new URLSearchParams();
+    if (args.limit) params.set("limit", String(args.limit));
+    if (args.after) params.set("after", args.after);
+    const qs = params.toString();
+    return textResult(await client.request(`/crm/v3/lists${qs ? `?${qs}` : ""}`));
+  }));
+
+  server.registerTool("crm_lists_get", {
+    description: "Get a CRM list by ID",
+    inputSchema: {
+      ...baseArgsSchema,
+      listId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const listIdSegment = encodePathSegment(args.listId, "listId");
+    return textResult(await client.request(`/crm/v3/lists/${listIdSegment}`));
+  }));
+
+  server.registerTool("crm_lists_create", {
+    description: "Create a CRM list (dry-run by default unless force=true)",
+    inputSchema: {
+      ...baseArgsSchema,
+      data: z.record(z.string(), z.unknown()),
+    },
+  }, (args) => executeTool(args, (ctx, client) => {
+    return maybeWrite(ctx, client, "POST", "/crm/v3/lists", args.data);
+  }));
+
+  server.registerTool("crm_lists_update", {
+    description: "Update a CRM list (dry-run by default unless force=true)",
+    inputSchema: {
+      ...baseArgsSchema,
+      listId: z.string().min(1),
+      data: z.record(z.string(), z.unknown()),
+    },
+  }, (args) => executeTool(args, (ctx, client) => {
+    const listIdSegment = encodePathSegment(args.listId, "listId");
+    return maybeWrite(ctx, client, "PATCH", `/crm/v3/lists/${listIdSegment}`, args.data);
+  }));
+
+  server.registerTool("crm_lists_delete", {
+    description: "Delete a CRM list (dry-run by default unless force=true)",
+    inputSchema: {
+      ...baseArgsSchema,
+      listId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, (ctx, client) => {
+    const listIdSegment = encodePathSegment(args.listId, "listId");
+    return maybeWrite(ctx, client, "DELETE", `/crm/v3/lists/${listIdSegment}`);
+  }));
+
+  server.registerTool("crm_lists_memberships", {
+    description: "Get memberships of a CRM list",
+    inputSchema: {
+      ...baseArgsSchema,
+      listId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const listIdSegment = encodePathSegment(args.listId, "listId");
+    return textResult(await client.request(`/crm/v3/lists/${listIdSegment}/memberships`));
+  }));
+
+  // ── Sequences ──────────────────────────────────────────────────────────
+
+  server.registerTool("sales_sequences_list", {
+    description: "List sales sequences with pagination",
+    inputSchema: {
+      ...baseArgsSchema,
+      limit: z.number().min(1).max(250).optional(),
+      after: z.string().optional(),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const params = new URLSearchParams();
+    if (args.limit) params.set("limit", String(args.limit));
+    if (args.after) params.set("after", args.after);
+    const qs = params.toString();
+    return textResult(await client.request(`/automation/v4/sequences${qs ? `?${qs}` : ""}`));
+  }));
+
+  server.registerTool("sales_sequences_get", {
+    description: "Get a sales sequence by ID",
+    inputSchema: {
+      ...baseArgsSchema,
+      sequenceId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const sequenceIdSegment = encodePathSegment(args.sequenceId, "sequenceId");
+    return textResult(await client.request(`/automation/v4/sequences/${sequenceIdSegment}`));
+  }));
+
+  server.registerTool("sales_sequences_enrollments", {
+    description: "Get enrollments for a sales sequence",
+    inputSchema: {
+      ...baseArgsSchema,
+      sequenceId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const sequenceIdSegment = encodePathSegment(args.sequenceId, "sequenceId");
+    return textResult(await client.request(`/automation/v4/sequences/${sequenceIdSegment}/enrollments`));
+  }));
+
+  // ── Reporting ──────────────────────────────────────────────────────────
+
+  server.registerTool("reporting_dashboards_list", {
+    description: "List analytics reports/dashboards with pagination",
+    inputSchema: {
+      ...baseArgsSchema,
+      limit: z.number().min(1).max(250).optional(),
+      after: z.string().optional(),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const params = new URLSearchParams();
+    if (args.limit) params.set("limit", String(args.limit));
+    if (args.after) params.set("after", args.after);
+    const qs = params.toString();
+    return textResult(await client.request(`/analytics/v2/reports${qs ? `?${qs}` : ""}`));
+  }));
+
+  server.registerTool("reporting_dashboards_get", {
+    description: "Get an analytics report/dashboard by ID",
+    inputSchema: {
+      ...baseArgsSchema,
+      dashboardId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const dashboardIdSegment = encodePathSegment(args.dashboardId, "dashboardId");
+    return textResult(await client.request(`/analytics/v2/reports/${dashboardIdSegment}`));
+  }));
+
+  // ── Exports ────────────────────────────────────────────────────────────
+
+  server.registerTool("crm_exports_create", {
+    description: "Create a CRM export (dry-run by default unless force=true)",
+    inputSchema: {
+      ...baseArgsSchema,
+      data: z.record(z.string(), z.unknown()),
+    },
+  }, (args) => executeTool(args, (ctx, client) => {
+    return maybeWrite(ctx, client, "POST", "/crm/v3/exports", args.data);
+  }));
+
+  server.registerTool("crm_exports_list", {
+    description: "List CRM exports with pagination",
+    inputSchema: {
+      ...baseArgsSchema,
+      limit: z.number().min(1).max(250).optional(),
+      after: z.string().optional(),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const params = new URLSearchParams();
+    if (args.limit) params.set("limit", String(args.limit));
+    if (args.after) params.set("after", args.after);
+    const qs = params.toString();
+    return textResult(await client.request(`/crm/v3/exports${qs ? `?${qs}` : ""}`));
+  }));
+
+  server.registerTool("crm_exports_get", {
+    description: "Get a CRM export by ID",
+    inputSchema: {
+      ...baseArgsSchema,
+      exportId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const exportIdSegment = encodePathSegment(args.exportId, "exportId");
+    return textResult(await client.request(`/crm/v3/exports/${exportIdSegment}`));
+  }));
+
+  server.registerTool("crm_exports_status", {
+    description: "Get the status of a CRM export",
+    inputSchema: {
+      ...baseArgsSchema,
+      exportId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, async (_ctx, client) => {
+    const exportIdSegment = encodePathSegment(args.exportId, "exportId");
+    return textResult(await client.request(`/crm/v3/exports/${exportIdSegment}/status`));
+  }));
+
+  // ── Pipeline Stages ────────────────────────────────────────────────────
+
+  server.registerTool("crm_pipelines_stages", {
+    description: "List stages for a pipeline",
+    inputSchema: {
+      ...baseArgsSchema,
+      objectType: z.enum(PIPELINE_OBJECT_TYPES),
+      pipelineId: z.string().min(1),
+    },
+  }, (args) => executeTool(args, (_ctx, client) => {
+    const objectTypeValue = parseSupportedObjectType(args.objectType, PIPELINE_OBJECT_TYPES, "objectType");
+    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const pipelineIdSegment = encodePathSegment(args.pipelineId, "pipelineId");
+    return client.request(`/crm/v3/pipelines/${objectTypeSegment}/${pipelineIdSegment}/stages`);
+  }));
+
+  // ── Property Groups ────────────────────────────────────────────────────
+
+  server.registerTool("crm_property_groups_list", {
+    description: "List property groups for an object type",
+    inputSchema: {
+      ...baseArgsSchema,
+      objectType: z.enum(PROPERTY_OBJECT_TYPES),
+    },
+  }, (args) => executeTool(args, (_ctx, client) => {
+    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
+    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    return client.request(`/crm/v3/properties/${objectTypeSegment}/groups`);
+  }));
+
+  server.registerTool("crm_property_groups_create", {
+    description: "Create a property group (dry-run by default unless force=true)",
+    inputSchema: {
+      ...baseArgsSchema,
+      objectType: z.enum(PROPERTY_OBJECT_TYPES),
+      data: z.record(z.string(), z.unknown()),
+    },
+  }, (args) => executeTool(args, (ctx, client) => {
+    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
+    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    return maybeWrite(ctx, client, "POST", `/crm/v3/properties/${objectTypeSegment}/groups`, args.data);
+  }));
+
+  server.registerTool("crm_property_groups_update", {
+    description: "Update a property group (dry-run by default unless force=true)",
+    inputSchema: {
+      ...baseArgsSchema,
+      objectType: z.enum(PROPERTY_OBJECT_TYPES),
+      groupName: z.string().min(1),
+      data: z.record(z.string(), z.unknown()),
+    },
+  }, (args) => executeTool(args, (ctx, client) => {
+    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
+    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const groupNameSegment = encodePathSegment(args.groupName, "groupName");
+    return maybeWrite(ctx, client, "PATCH", `/crm/v3/properties/${objectTypeSegment}/groups/${groupNameSegment}`, args.data);
+  }));
 }
 
 export function createMcpServer(): McpServer {
