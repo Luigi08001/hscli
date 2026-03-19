@@ -31,7 +31,7 @@ hubcli is being extended as part of **HubSpot Pilot** (SaaS audit tool). hubcli 
   5. `reporting` — Analytics dashboards (list, get)
   6. `exports` — CRM Exports API (create, list, get, status)
 - **Reason**: Copilot needs write access to all major HubSpot modules
-- **Status**: IN PROGRESS (sub-agent building)
+- **Status**: DONE — typecheck clean, 155 tests passed
 - **Result**: hubcli will have ~24 commands, covering 100% of Copilot needs
 
 ## Architecture Rules (for all agents)
