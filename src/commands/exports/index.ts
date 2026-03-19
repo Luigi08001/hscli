@@ -14,7 +14,7 @@ export function registerExports(program: Command, getCtx: () => CliContext): voi
       const ctx = getCtx();
       const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
-      const res = await maybeWrite(ctx, client, "POST", "/crm/v3/exports", payload);
+      const res = await maybeWrite(ctx, client, "POST", "/crm/v3/exports/export/async", payload);
       printResult(ctx, res);
     });
 
@@ -28,7 +28,7 @@ export function registerExports(program: Command, getCtx: () => CliContext): voi
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
-      const res = await client.request(`/crm/v3/exports?${params.toString()}`);
+      const res = await client.request(`/crm/v3/exports/export/async/tasks?${params.toString()}`);
       printResult(ctx, res);
     });
 
@@ -36,7 +36,7 @@ export function registerExports(program: Command, getCtx: () => CliContext): voi
     const ctx = getCtx();
     const client = createClient(ctx.profile);
     const exportIdSegment = encodePathSegment(exportId, "exportId");
-    const res = await client.request(`/crm/v3/exports/${exportIdSegment}`);
+    const res = await client.request(`/crm/v3/exports/export/async/tasks/${exportIdSegment}`);
     printResult(ctx, res);
   });
 
@@ -44,7 +44,7 @@ export function registerExports(program: Command, getCtx: () => CliContext): voi
     const ctx = getCtx();
     const client = createClient(ctx.profile);
     const exportIdSegment = encodePathSegment(exportId, "exportId");
-    const res = await client.request(`/crm/v3/exports/${exportIdSegment}/status`);
+    const res = await client.request(`/crm/v3/exports/export/async/tasks/${exportIdSegment}/status`);
     printResult(ctx, res);
   });
 }
