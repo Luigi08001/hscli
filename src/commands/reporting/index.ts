@@ -18,7 +18,25 @@ export function registerReporting(program: Command, getCtx: () => CliContext): v
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
-      const res = await client.request(`/analytics/v2/reports?${params.toString()}`);
+      const res = await client.request(`/crm/v3/objects/feedback_submissions?${params.toString()}`);
+      printResult(ctx, res);
+    });
+
+  // Analytics content endpoint (pages, blog posts performance)
+  const content = reporting.command("content").description("Content analytics");
+
+  content
+    .command("pages")
+    .option("--start <date>", "Start date (YYYY-MM-DD)")
+    .option("--end <date>", "End date (YYYY-MM-DD)")
+    .action(async (opts) => {
+      const ctx = getCtx();
+      const client = createClient(ctx.profile);
+      const params = new URLSearchParams();
+      if (opts.start) params.set("start", opts.start);
+      if (opts.end) params.set("end", opts.end);
+      const qs = params.toString();
+      const res = await client.request(`/cms/v3/site-search/indexed-data/pages${qs ? `?${qs}` : ""}`);
       printResult(ctx, res);
     });
 
@@ -26,7 +44,7 @@ export function registerReporting(program: Command, getCtx: () => CliContext): v
     const ctx = getCtx();
     const client = createClient(ctx.profile);
     const dashboardIdSegment = encodePathSegment(dashboardId, "dashboardId");
-    const res = await client.request(`/analytics/v2/reports/${dashboardIdSegment}`);
+    const res = await client.request(`/crm/v3/objects/feedback_submissions/${dashboardIdSegment}`);
     printResult(ctx, res);
   });
 }
