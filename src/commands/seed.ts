@@ -384,6 +384,22 @@ export function registerSeed(program: Command, getCtx: () => CliContext): void {
     .description("Create sample CRM data (contacts, companies, deals, tickets, engagements) using the connected portal's pipelines and owner")
     .action(async () => {
       const ctx = getCtx();
+      if (ctx.dryRun) {
+        printResult(ctx, {
+          dryRun: true,
+          message: "Dry-run mode: no records will be created. Remove --dry-run and use --force to execute.",
+          wouldCreate: {
+            contacts: CONTACTS.length,
+            companies: COMPANIES.length,
+            deals: DEALS.length,
+            tickets: TICKETS.length,
+            notes: NOTES.length,
+            tasks: TASKS.length,
+            calls: CALLS.length,
+          },
+        });
+        return;
+      }
       if (!ctx.force) {
         throw new CliError(
           "WRITE_CONFIRMATION_REQUIRED",

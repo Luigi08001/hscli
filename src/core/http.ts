@@ -51,6 +51,7 @@ const ALLOWED_PATH_SCOPES = [
   "webhooks",
   "account-info",
   "integrations",
+  "analytics",
 ];
 
 interface RollingQuotaState {
