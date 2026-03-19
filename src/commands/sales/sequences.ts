@@ -11,12 +11,22 @@ export function registerSequences(sales: Command, getCtx: () => CliContext): voi
     .command("list")
     .option("--limit <n>", "Max records", "100")
     .option("--after <cursor>", "Paging cursor")
+    .option("--user-id <id>", "Owner/user ID (required by HubSpot API)")
     .action(async (opts) => {
       const ctx = getCtx();
       const client = createClient(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
+      // Sequences API requires userId — auto-detect from owners if not provided
+      let userId = opts.userId;
+      if (!userId) {
+        try {
+          const owners = await client.request("/crm/v3/owners?limit=1") as { results?: Array<{ userId?: number }> };
+          userId = owners.results?.[0]?.userId?.toString();
+        } catch { /* fallback: omit userId */ }
+      }
+      if (userId) params.set("userId", userId);
       const res = await client.request(`/automation/v4/sequences?${params.toString()}`);
       printResult(ctx, res);
     });
