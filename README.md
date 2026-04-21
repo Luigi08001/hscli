@@ -155,6 +155,81 @@ hscli --force --policy-file docs/POLICY_EXAMPLE.json --change-ticket CHG-123 \
   crm contacts delete 123
 ```
 
+<details>
+<summary><strong>Policy-as-code (v0.7)</strong> — glob matching, time windows, approval gates, built-in templates</summary>
+
+Policy files let ops define *what* an agent is allowed to do — not just *whether* it can write. Rule matching is first-match-wins: method + path glob (`*` within a segment, `**` across segments), optional time window (`window.hours`, `window.days`, `window.tz`), optional change-ticket requirement, optional approval gate.
+
+```bash
+# List built-in templates (read-only, no-deletes, business-hours, compliance-strict, change-ticket-required)
+hscli policy templates list
+
+# Copy a template to edit locally
+hscli policy templates extract no-deletes --to ./policy.json
+
+# Validate before shipping
+hscli policy validate ./policy.json
+
+# Dry-run which rule would fire for a hypothetical request
+hscli --policy-file ./policy.json \
+  policy show-matching DELETE /crm/v3/objects/contacts/123
+```
+
+Enforcement is automatic once `--policy-file` is set (or `HSCLI_POLICY_FILE` env var). Error codes (`POLICY_RULE_DENY`, `POLICY_DEFAULT_DENY`, `POLICY_CHANGE_TICKET_REQUIRED`, `POLICY_APPROVAL_REQUIRED`, `POLICY_OUT_OF_WINDOW`) are machine-readable.
+
+Tutorial: [docs/TUTORIALS/secure-agent-writes.md](docs/TUTORIALS/secure-agent-writes.md).
+
+</details>
+
+<details>
+<summary><strong>Trace + replay (v0.6+)</strong> — observability of every request, human + MCP</summary>
+
+`hscli trace` records every request to a JSONL file — method, path, status, latency, profile, `toolName` (when invoked from an MCP tool), optional request/response bodies. Useful for reproducibility, regression detection between portals, debugging agent behavior.
+
+```bash
+# Start recording to ~/.revfleet/trace-<ts>.jsonl (or pass --out)
+hscli trace start --include-bodies --scope all
+
+# Run anything. Every request appends.
+hscli crm contacts list
+hscli mcp   # MCP requests tagged with toolName
+
+# Stop; the file stays, session state clears.
+hscli trace stop
+
+# Inspect
+hscli trace show ./trace-<ts>.jsonl --filter status=>=400
+hscli trace stats ./trace-<ts>.jsonl          # p50/p95/p99 latency, method breakdown
+hscli trace errors ./trace-<ts>.jsonl         # only errors
+hscli trace diff  ./run-a.jsonl ./run-b.jsonl # detect reproducibility divergence
+
+# Replay GETs (safe-by-default: dry-run unless --force)
+hscli trace replay ./trace-<ts>.jsonl
+```
+
+Writes (`POST/PUT/PATCH/DELETE`) are intentionally not replayable to prevent accidental re-mutation.
+
+Tutorial: [docs/TUTORIALS/trace-replay-repro.md](docs/TUTORIALS/trace-replay-repro.md).
+
+</details>
+
+<details>
+<summary><strong>Audit (v0.7)</strong> — &ldquo;who did what when&rdquo; across every recorded session</summary>
+
+`hscli audit` reads trace JSONL files (single file or an entire directory of `trace-*.jsonl`) and answers operational audit questions. Pairs with `trace` for full provenance.
+
+```bash
+hscli audit timeline --since 24h                     # chronological event list, last 24h
+hscli audit who alice --since 7d                     # what has profile 'alice' done?
+hscli audit what /crm/v3/objects/contacts --since 7d # who touched this path?
+hscli audit writes --since 24h                       # all writes in the last 24h (+ failures)
+hscli audit by-tool                                  # per-MCP-tool call count, error rate, avg latency
+```
+
+Tutorial: [docs/TUTORIALS/audit-portal-writes.md](docs/TUTORIALS/audit-portal-writes.md).
+
+</details>
+
 ## Output modes
 
 ```bash
@@ -176,18 +251,18 @@ For Claude Desktop, add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "hubcli": {
-      "command": "hubcli",
+    "hscli": {
+      "command": "hscli",
       "args": ["mcp"],
       "env": {
-        "HUBCLI_MCP_PROFILE": "default"
+        "HSCLI_MCP_PROFILE": "default"
       }
     }
   }
 }
 ```
 
-Restart Claude. Now Claude can list contacts, search deals, inspect workflows, and — with `--force` passed at tool-call time — perform safe writes. All CLI safety rails apply to MCP calls. Secrets are redacted from every tool response. `HUBCLI_MCP_PROFILE` locks the stdio server to one auth profile to prevent cross-tenant access.
+Restart Claude. Now Claude can list contacts, search deals, inspect workflows, and — with `--force` passed at tool-call time — perform safe writes. All CLI safety rails apply to MCP calls. Secrets are redacted from every tool response. `HSCLI_MCP_PROFILE` locks the stdio server to one auth profile to prevent cross-tenant access.
 
 See [docs/MCP.md](docs/MCP.md) for the full tool catalog.
 
@@ -229,12 +304,14 @@ Full threat model: [SECURITY.md](SECURITY.md).
 
 ## Caches
 
-Under `HUBCLI_HOME` (default: `~/.hubcli`):
+Under `HSCLI_HOME` (default: `~/.revfleet`; legacy `~/.hubcli` is still honored for existing installs):
 
 - `auth.json` — profile tokens (0600 permissions, 0700 directory)
 - `capabilities.json` — portal/tier capability cache
 - `schema-cache.json` — CRM schema cache for describe/validate
 - `auth.enc` — optional encrypted vault (when passphrase is set)
+- `trace-session.json` — active trace session state (v0.6+)
+- `trace-*.jsonl` — recorded request traces (v0.6+)
 
 ## Documentation
 

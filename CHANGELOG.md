@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.7.1 - 2026-04-21
+
+**Stabilization release.** No new surface area — hardens v0.7.0 with a test
+suite, three practical tutorials, README updates, and a few small bug fixes
+around the contract-test harness and config paths.
+
+### Tests
+
+- **`tests/policy.test.ts`** — 20 tests covering `readPolicyFile`,
+  glob matching (`*` vs `**`, method `*`, first-match-wins), v2 rule
+  evaluation (`defaultAction`, `action: deny`, `requireChangeTicket`,
+  `requireApproval`, `window.days`), v1 legacy back-compat
+  (`allowWrite: false`, `blockedMethodPathPrefixes`), per-profile
+  override, `HSCLI_POLICY_FILE` env var, Saturday-outside-window path.
+- **`tests/trace.test.ts`** — 16 tests covering session lifecycle
+  (`start`/`stop`/`status`), `show` + filter operators (`>=`, `<=`,
+  `!`, substring), `stats` (percentiles + write/read counts),
+  `errors`, `diff` (structural divergence, `/{id}` path
+  normalization), `replay` dry-run-by-default, malformed JSONL
+  tolerance.
+- **`tests/audit.test.ts`** — 13 tests covering `timeline` +
+  `--writes-only` + `--since`, `who` (byMethod/byStatus/byPathRoot),
+  `what` (path substring + byProfile + byTool), `writes`
+  (success/fail counts + `--limit`), `by-tool` (error rate + avg
+  latency + sort), since-parsing (`30m`/`24h`/`7d`), malformed JSONL.
+
+### Docs
+
+- **`docs/TUTORIALS/secure-agent-writes.md`** — end-to-end walkthrough
+  of setting up policy-as-code for an MCP agent: extract template →
+  tighten → validate → dry-run matching → enforce → hook into MCP.
+- **`docs/TUTORIALS/trace-replay-repro.md`** — bug reproduction
+  workflow using `trace start` / `stop` / `diff` / `replay`.
+- **`docs/TUTORIALS/audit-portal-writes.md`** — operator audit guide
+  with `jq` recipes and CI integration patterns.
+- **README** — expanded Quickstart with three collapsible sections for
+  policy / trace / audit. Corrected MCP config (`hscli` binary,
+  `HSCLI_MCP_PROFILE` env var). Updated caches section to reflect
+  `~/.revfleet/` primary location with `~/.hubcli/` legacy fallback.
+
+### Fixes
+
+- **`package.json:scripts.test:contract`** — env var name corrected
+  from `HUBCLI_ENABLE_SANDBOX_CONTRACT` to `HSCLI_ENABLE_SANDBOX_CONTRACT`
+  (the test file expects the latter).
+- **`tests/contract.sandbox.test.ts`** — harness now uses `~/.revfleet/`
+  and unwraps the `{ ok, data }` JSON envelope. Tests were silently
+  broken for anyone actually opting in to the contract run.
+
 ## 0.7.0 - 2026-04-21
 
 **Trust plane.** New `hscli policy` + `hscli audit` command groups give
