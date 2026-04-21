@@ -765,20 +765,107 @@ async function runSeed(ctx: CliContext): Promise<void> {
     result.skipped.push({ type: "marketing_email", name: "HubCLI Seed Email", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
   }
 
-  // --- HubDB table (CMS Hub feature) ---
+  // --- HubDB table + rows + publish ---
   try {
     const hdbRec = await safeCreate(client, "/cms/v3/hubdb/tables", {
-      name: "hubcli_seed_table",
-      label: "HubCLI Seed Table",
+      name: `hubcli_seed_table_${runSuffix}`,
+      label: `HubCLI Seed Table ${runSuffix}`,
       useForPages: false,
       columns: [
         { name: "key", label: "Key", type: "TEXT" },
         { name: "value", label: "Value", type: "TEXT" },
       ],
     });
-    if (hdbRec) result.created.push({ type: "hubdb_table", name: "hubcli_seed_table", id: hdbRec.id });
+    if (hdbRec) {
+      result.created.push({ type: "hubdb_table", name: `hubcli_seed_table_${runSuffix}`, id: hdbRec.id });
+      // Add a row to the draft
+      try {
+        const rowRec = await safeCreate(client, `/cms/v3/hubdb/tables/${hdbRec.id}/rows/draft/batch/create`, {
+          inputs: [{ values: { key: "sample-key", value: "sample-value" } }],
+        });
+        if (rowRec) result.created.push({ type: "hubdb_row", name: "sample-row", id: String(rowRec.id) });
+      } catch { /* ignore row failure */ }
+      // Publish the table
+      try {
+        await client.request(`/cms/v3/hubdb/tables/${hdbRec.id}/draft/publish`, { method: "POST", body: {} });
+        result.created.push({ type: "hubdb_publish", name: "table published", id: hdbRec.id });
+      } catch { /* ignore publish failure */ }
+    }
   } catch (err) {
     result.skipped.push({ type: "hubdb_table", name: "hubcli_seed_table", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
+  }
+
+  // --- Create revisions by EDITING pages/posts (triggers revision history) ---
+  // For each site page / landing page we already created, do a small update
+  // to generate a revision entry — this unblocks the /revisions/{id} GET endpoints.
+  try {
+    const sitePages = await client.request("/cms/v3/pages/site-pages?limit=5") as { results?: Array<{ id?: string; name?: string }> };
+    for (const sp of sitePages.results?.slice(0, 2) ?? []) {
+      if (!sp.id) continue;
+      try {
+        await client.request(`/cms/v3/pages/site-pages/${sp.id}/draft`, {
+          method: "PATCH",
+          body: { metaDescription: `Revised by hubcli seed at ${nowIso()}` },
+        });
+        result.created.push({ type: "revision:site_page", name: sp.name || sp.id, id: sp.id });
+      } catch { /* skip */ }
+    }
+  } catch { /* ignore */ }
+  try {
+    const lpList = await client.request("/cms/v3/pages/landing-pages?limit=5") as { results?: Array<{ id?: string; name?: string }> };
+    for (const lp of lpList.results?.slice(0, 2) ?? []) {
+      if (!lp.id) continue;
+      try {
+        await client.request(`/cms/v3/pages/landing-pages/${lp.id}/draft`, {
+          method: "PATCH",
+          body: { metaDescription: `Revised by hubcli seed at ${nowIso()}` },
+        });
+        result.created.push({ type: "revision:landing_page", name: lp.name || lp.id, id: lp.id });
+      } catch { /* skip */ }
+    }
+  } catch { /* ignore */ }
+
+  // --- Custom object schema (creates a new object type if none exist) ---
+  if (customSchemas.length === 0) {
+    try {
+      const schemaRec = await safeCreate(client, "/crm/v3/schemas", {
+        name: `hubcli_seed_object_${runSuffix}`,
+        labels: { singular: `Seed Object ${runSuffix}`, plural: `Seed Objects ${runSuffix}` },
+        primaryDisplayProperty: "name",
+        requiredProperties: ["name"],
+        searchableProperties: ["name"],
+        properties: [
+          { name: "name", label: "Name", type: "string", fieldType: "text" },
+        ],
+        associatedObjects: ["CONTACT"],
+      }) as { id: string } | null;
+      if (schemaRec) {
+        result.created.push({ type: "custom_object_schema", name: `hubcli_seed_object_${runSuffix}`, id: schemaRec.id });
+        // Create one record against the new schema
+        try {
+          const rec = await safeCreate(client, `/crm/v3/objects/hubcli_seed_object_${runSuffix}`, {
+            properties: { name: `Sample ${runSuffix}` },
+          });
+          if (rec) result.created.push({ type: `custom:hubcli_seed_object_${runSuffix}`, name: `Sample ${runSuffix}`, id: rec.id });
+        } catch { /* skip */ }
+      }
+    } catch (err) {
+      result.skipped.push({ type: "custom_object_schema", name: "hubcli_seed_object", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
+    }
+  }
+
+  // --- Timeline event template via integration API (requires OAuth devapp; skipped on PA) ---
+  // Left here to document the expected path — will 404 on Private App tokens (documented).
+  try {
+    const tmplRec = await safeCreate(client, `/integrators/timeline/v3/${runSuffix}/event/templates`, {
+      name: `hubcli_seed_template_${runSuffix}`,
+      objectType: "contacts",
+      headerTemplate: "HubCLI Seed Event",
+      detailTemplate: "Event emitted by hubcli seed.",
+    });
+    if (tmplRec) result.created.push({ type: "integrator_timeline_template", name: `hubcli_seed_template_${runSuffix}`, id: tmplRec.id });
+  } catch (err) {
+    result.skipped.push({ type: "integrator_timeline_template", name: "hubcli_seed_template", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
   }
 
   // --- Custom objects: create a sample record per schema ---
