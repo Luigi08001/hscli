@@ -22,7 +22,9 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # Matches ci.yml — see that file for the rationale (cross-OS WASM
+        # transitive resolution differences between macOS and Linux).
+        run: npm install --no-audit --prefer-offline
 
       - name: Typecheck
         run: npm run typecheck
