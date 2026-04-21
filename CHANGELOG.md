@@ -1,5 +1,95 @@
 # Changelog
 
+## 0.4.0 - 2026-04-21
+
+Completeness and coverage release. Brings hubcli to ~100% of the stable
+HubSpot public API surface: fixes three orphan top-level modules that were
+shipped but never wired into the CLI in 0.3.0, adds high-leverage search
+primitives to every CRM object, closes seven documented P1 coverage gaps
+(files folders, marketing events attendance, associations v4 labels, legacy
+email events per-recipient stream, conversations inboxes/channels/channel-
+accounts/actors, CRM UI Extension cards, sales sequences enroll/unenroll),
+and reaches a fully clean `npm audit` (0 vulnerabilities) with no
+runtime-facing advisories.
+
+### Added
+
+- `crm <object> filter` — search across any CRM object with property filters
+  and HubSpot standard operators (EQ, NEQ, GT, GTE, LT, LTE, HAS_PROPERTY,
+  NOT_HAS_PROPERTY, CONTAINS_TOKEN, NOT_CONTAINS_TOKEN, BETWEEN). Supports
+  `--sorts`, `--properties`, `--query`, `--limit`, `--after`, `--count-only`.
+  Applies to contacts, companies, deals, tickets, products, quotes, line-items,
+  invoices, subscriptions, payments, goals, and every custom object registered
+  via `registerObjectCommands`.
+- `crm <object> count` — count-only mode for fast totals, optionally filtered.
+- `files folders {list,get,create,update,archive}` — File Manager folder CRUD
+  (`/files/v3/folders`), including `--parent-folder-id` filtering for tree walks.
+- `marketing events participations <externalEventId>` — breakdown of
+  participation state by attendee
+  (`/marketing/v3/marketing-events/{id}/participations/breakdown`).
+- `marketing events attendance <externalEventId> <state>` — record attendance
+  state transitions (register | cancel | attend | no-show) for contacts on an
+  event (`/marketing/v3/marketing-events/attendance/{id}/{state}/create`).
+- `crm associations labels {list,create,update,delete}` — CRUD user-defined
+  association label definitions between two object types
+  (`/crm/v4/associations/{fromType}/{toType}/labels`).
+- `email-events {list,get,campaigns-by-id,campaign}` — legacy per-recipient
+  event stream with filters for recipient, campaign id, event type, timestamps
+  (`/email/public/v1/events`, `/email/public/v1/campaigns/*`). Richer than
+  `marketing emails stats` for downstream analytics pipelines.
+- `conversations inboxes {list,get}`, `conversations channels {list,get}`,
+  `conversations channel-accounts {list,get}`, `conversations actors {get,batch-read}` —
+  routing topology and actor hydration endpoints
+  (`/conversations/v3/conversations/{inboxes,channels,channel-accounts,actors}`).
+- `crm cards {list,get,create,update,delete}` — UI Extension card definitions
+  for app developers building CRM record sidebar cards
+  (`/crm/v3/extensions/cards/{appId}`).
+- `sales sequences enroll` — enroll a contact in a sales sequence
+  (`POST /automation/v4/sequences/enrollments`).
+- `sales sequences unenroll <enrollmentId>` — cancel an active enrollment
+  (`POST /automation/v4/sequences/enrollments/{id}/cancel`).
+
+### Fixed
+
+- **Wire three orphan top-level modules** that existed in `src/commands/` but
+  were never called from `src/cli.ts` in 0.3.0, making 18 subcommands invisible
+  at runtime:
+  - `hubcli account` — info, audit-logs, private-apps, api-usage
+  - `hubcli communication-preferences` — definitions, status, subscribe,
+    unsubscribe, email-resubscribe
+  - `hubcli events` — event-definitions CRUD + send behavioral events
+- **Clean npm audit** (0 vulnerabilities, including devDependencies):
+  - Removed `@hubspot/cli` from `devDependencies` — it was never imported by
+    source or tests, contributed 14 transitive advisories (axios, express,
+    vite, js-yaml, minimatch, qs, etc.), and its presence did not support
+    `hubcli doctor hublet-check` (that feature reads `~/.hscli/config.yml`
+    which is only written by a *global* install of `@hubspot/cli`).
+    Contributors who want to test `doctor hublet-check` should install
+    `@hubspot/cli` globally: `npm i -g @hubspot/cli`.
+  - Bumped `@modelcontextprotocol/sdk` from ^1.27.1 to ^1.29.0 (patches
+    ReDoS CVE GHSA-8r9q-7v3j-jr4g and cross-client leak GHSA-345p-7cg4-v4c7).
+  - Added `overrides.path-to-regexp: ^8.4.2` to force the patched transitive
+    through express@5.2.1 → router@2.2.0 (fixes GHSA-j3q9-mxjg-w52f and
+    GHSA-27v5-c462-wpq7 ReDoS).
+
+### Known niche gaps (deferred, not P1)
+
+The following HubSpot API surfaces remain intentionally unshipped — each is
+either out of scope for a general-purpose CRM CLI or depends on internal/
+unstable endpoints:
+
+- CMS source code / project upload / theme push (belongs to `@hubspot/cli`)
+- Developer Projects API (`/project-components-external/v3`)
+- Design Manager file push
+- Playbooks / Documents tracking (no stable public API)
+- Marketing SMS (limited GA availability)
+- CTA legacy API (`/cta/v3`)
+- Accounting Extension (`/crm/v3/extensions/accounting`) — QBO/Xero niche
+- Video Conferencing Extension (`/crm/v3/extensions/videoconferencing`)
+- Partner API (`/partners/v3`) — Solutions Partners only
+
+---
+
 ## 0.3.0 - 2026-04-17
 
 First public release. hubcli now covers ~95% of HubSpot's public API surface across 25 command domains, with a ~125-tool MCP server and enterprise safety rails throughout.
