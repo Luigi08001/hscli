@@ -498,46 +498,78 @@ async function runSeed(ctx: CliContext): Promise<void> {
     }
   }
 
-  // --- Marketing Form (non-HubSpot type to avoid legal consent payload complexity) ---
+  // --- Marketing Form (full payload: requires createdAt + valid sub type id) ---
   try {
-    const formName = `HubCLI Seed Contact Form ${runSuffix}`;
-    const formRec = await safeCreate(client, "/marketing/v3/forms/", {
-      name: formName,
-      formType: "hubspot",
-      fieldGroups: [{
-        groupType: "default_group",
-        richTextType: "text",
-        fields: [
-          { objectTypeId: "0-1", name: "email", label: "Email", required: true, fieldType: "email", hidden: false },
-          { objectTypeId: "0-1", name: "firstname", label: "First name", required: false, fieldType: "single_line_text", hidden: false },
-        ],
-      }],
-      configuration: {
-        allowLinkToResetForEditors: false,
-        archivable: true,
-        cloneable: true,
-        createNewContactForNewEmail: true,
-        editable: true,
-        language: "en",
-        notifyContactOwner: false,
-        postSubmitAction: { type: "thank_you", value: "Thanks!" },
-        recaptchaEnabled: false,
-      },
-      displayOptions: {
-        renderRawHtml: false,
-        theme: "default_style",
-        submitButtonText: "Submit",
-      },
-      legalConsentOptions: {
-        type: "legitimate_interest",
-        subscriptionTypeIds: [],
-        lawfulBasis: "LEAD",
-        privacyText: "HubCLI seed test form — not for production use.",
+    // First, discover an available subscription type id (required by lawfulBasis=lead)
+    let subTypeId: number | undefined;
+    try {
+      const defs = await client.request("/communication-preferences/v3/definitions") as { subscriptionDefinitions?: Array<{ id?: string | number; active?: boolean }> };
+      const activeSub = defs.subscriptionDefinitions?.find(s => s.active !== false);
+      if (activeSub?.id) subTypeId = Number(activeSub.id);
+    } catch { /* no subs — skip form */ }
+
+    if (subTypeId) {
+      const formName = `HubCLI Seed Contact Form ${runSuffix}`;
+      const now = nowIso();
+      const formRec = await safeCreate(client, "/marketing/v3/forms/", {
+        name: formName,
+        formType: "hubspot",
+        archived: false,
+        createdAt: now,
+        updatedAt: now,
+        fieldGroups: [{
+          groupType: "default_group",
+          richTextType: "text",
+          fields: [
+            { objectTypeId: "0-1", name: "email", label: "Email", required: true, hidden: false, fieldType: "email", validation: { blockedEmailDomains: [], useDefaultBlockList: false } },
+            { objectTypeId: "0-1", name: "firstname", label: "First name", required: false, hidden: false, fieldType: "single_line_text" },
+          ],
+        }],
+        configuration: {
+          allowLinkToResetForEditors: false,
+          archivable: true,
+          cloneable: true,
+          createNewContactForNewEmail: true,
+          editable: true,
+          language: "en",
+          notifyContactOwner: false,
+          notifyRecipients: [],
+          postSubmitAction: { type: "thank_you", value: "Thanks!" },
+          recaptchaEnabled: false,
+          prePopulateKnownValues: false,
+        },
+        displayOptions: {
+          renderRawHtml: false,
+          theme: "default_style",
+          submitButtonText: "Submit",
+        },
+        legalConsentOptions: {
+          type: "legitimate_interest",
+          lawfulBasis: "lead",
+          privacyText: "HubCLI seed test form — not for production use.",
+          subscriptionTypeIds: [subTypeId],
+        },
+      });
+      if (formRec) result.created.push({ type: "form", name: formName, id: formRec.id });
+    } else {
+      result.skipped.push({ type: "form", name: "HubCLI Seed Form", reason: "no active subscription type on portal" });
+    }
+  } catch (err) {
+    result.skipped.push({ type: "form", name: "HubCLI Seed Form", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
+  }
+
+  // --- Marketing campaign (Marketing Hub Starter+) ---
+  try {
+    const campaignRec = await safeCreate(client, "/marketing/v3/campaigns", {
+      properties: {
+        hs_name: `HubCLI Seed Campaign ${runSuffix}`,
+        hs_start_date: new Date().toISOString().split("T")[0],
+        hs_end_date: futureDate(60),
       },
     });
-    if (formRec) result.created.push({ type: "form", name: formName, id: formRec.id });
+    if (campaignRec) result.created.push({ type: "campaign", name: `HubCLI Seed Campaign ${runSuffix}`, id: campaignRec.id });
   } catch (err) {
-    result.skipped.push({ type: "form", name: "HubCLI Seed Contact Form", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
+    result.skipped.push({ type: "campaign", name: "HubCLI Seed Campaign", reason: err instanceof CliError ? `${err.code}:${err.status} (needs Marketing Hub Starter+)` : "error" });
   }
 
   // --- Static contact list ---
@@ -718,20 +750,18 @@ async function runSeed(ctx: CliContext): Promise<void> {
     result.skipped.push({ type: "blog_tag", name: "HubCLI Seed Tag", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
   }
 
-  // --- Small file upload (text content via URL import endpoint) ---
+  // --- File upload via URL import (correct path: /import-from-url/async) ---
   try {
-    const fileRec = await client.request("/files/v3/files/import/from/url/async", {
+    const fileRec = await client.request("/files/v3/files/import-from-url/async", {
       method: "POST",
       body: {
         access: "PUBLIC_NOT_INDEXABLE",
-        name: `hubcli-seed-${runSuffix}.txt`,
-        url: "https://hubspot.com/favicon.ico",
+        name: `hubcli-seed-${runSuffix}.ico`,
+        url: "https://www.hubspot.com/favicon.ico",
         folderPath: "/hubcli-seed",
-        duplicateValidationStrategy: "REJECT",
-        duplicateValidationScope: "ENTIRE_PORTAL",
       },
     }) as { id?: string };
-    if (fileRec?.id) result.created.push({ type: "file_import_task", name: `hubcli-seed-${runSuffix}.txt`, id: fileRec.id });
+    if (fileRec?.id) result.created.push({ type: "file_import_task", name: `hubcli-seed-${runSuffix}.ico`, id: fileRec.id });
   } catch (err) {
     result.skipped.push({ type: "file_import_task", name: "hubcli-seed file", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
   }
@@ -795,9 +825,9 @@ async function runSeed(ctx: CliContext): Promise<void> {
     result.skipped.push({ type: "hubdb_table", name: "hubcli_seed_table", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
   }
 
-  // --- Create revisions by EDITING pages/posts (triggers revision history) ---
-  // For each site page / landing page we already created, do a small update
-  // to generate a revision entry — this unblocks the /revisions/{id} GET endpoints.
+  // --- Create revisions by EDITING + push-live site/landing pages ---
+  // PATCH /draft creates a revision entry (unblocks /revisions/{id} GETs).
+  // POST /draft/push-live publishes so the page has both a draft and a published version.
   try {
     const sitePages = await client.request("/cms/v3/pages/site-pages?limit=5") as { results?: Array<{ id?: string; name?: string }> };
     for (const sp of sitePages.results?.slice(0, 2) ?? []) {
@@ -808,6 +838,11 @@ async function runSeed(ctx: CliContext): Promise<void> {
           body: { metaDescription: `Revised by hubcli seed at ${nowIso()}` },
         });
         result.created.push({ type: "revision:site_page", name: sp.name || sp.id, id: sp.id });
+        // Push-live: promotes the draft revision to the published version
+        try {
+          await client.request(`/cms/v3/pages/site-pages/${sp.id}/draft/push-live`, { method: "POST", body: {} });
+          result.created.push({ type: "publish:site_page", name: sp.name || sp.id, id: sp.id });
+        } catch { /* publishing may fail if missing template — skip */ }
       } catch { /* skip */ }
     }
   } catch { /* ignore */ }
@@ -821,7 +856,82 @@ async function runSeed(ctx: CliContext): Promise<void> {
           body: { metaDescription: `Revised by hubcli seed at ${nowIso()}` },
         });
         result.created.push({ type: "revision:landing_page", name: lp.name || lp.id, id: lp.id });
+        try {
+          await client.request(`/cms/v3/pages/landing-pages/${lp.id}/draft/push-live`, { method: "POST", body: {} });
+          result.created.push({ type: "publish:landing_page", name: lp.name || lp.id, id: lp.id });
+        } catch { /* skip */ }
       } catch { /* skip */ }
+    }
+  } catch { /* ignore */ }
+
+  // --- Custom deal pipeline (creatable on any tier, unlocks pipeline edit endpoints) ---
+  try {
+    const pipeRec = await safeCreate(client, "/crm/v3/pipelines/deals", {
+      label: `HubCLI Seed Pipeline ${runSuffix}`,
+      displayOrder: 99,
+      stages: [
+        { label: "Lead", metadata: { probability: "0.1" }, displayOrder: 0 },
+        { label: "Qualified", metadata: { probability: "0.3" }, displayOrder: 1 },
+        { label: "Proposal", metadata: { probability: "0.7" }, displayOrder: 2 },
+        { label: "Won", metadata: { probability: "1.0" }, displayOrder: 3 },
+      ],
+    });
+    if (pipeRec) result.created.push({ type: "pipeline:deals", name: `HubCLI Seed Pipeline ${runSuffix}`, id: pipeRec.id });
+  } catch (err) {
+    result.skipped.push({ type: "pipeline:deals", name: "HubCLI Seed Pipeline", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
+  }
+
+  // --- Custom ticket pipeline ---
+  try {
+    const pipeRec = await safeCreate(client, "/crm/v3/pipelines/tickets", {
+      label: `HubCLI Seed Ticket Pipeline ${runSuffix}`,
+      displayOrder: 99,
+      stages: [
+        { label: "New", metadata: { ticketState: "OPEN" }, displayOrder: 0 },
+        { label: "Waiting on Contact", metadata: { ticketState: "OPEN" }, displayOrder: 1 },
+        { label: "Closed", metadata: { ticketState: "CLOSED" }, displayOrder: 2 },
+      ],
+    });
+    if (pipeRec) result.created.push({ type: "pipeline:tickets", name: `HubCLI Seed Ticket Pipeline ${runSuffix}`, id: pipeRec.id });
+  } catch (err) {
+    result.skipped.push({ type: "pipeline:tickets", name: "HubCLI Seed Ticket Pipeline", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
+  }
+
+  // --- Workflow (Ops Hub Pro+; free portal returns 400 with confusing enum error) ---
+  // HubSpot's API asks for both type + flowType with mutually-exclusive enums on
+  // the validation side depending on tier. We try the most-common-shape payload
+  // and capture the tier-locked failure if it returns 400/403.
+  try {
+    const wfRec = await safeCreate(client, "/automation/v4/flows", {
+      name: `HubCLI Seed Workflow ${runSuffix}`,
+      type: "WORKFLOW",
+      flowType: "CONTACT_FLOW",
+      objectTypeId: "0-1",
+      isEnabled: false,
+    });
+    if (wfRec) result.created.push({ type: "workflow", name: `HubCLI Seed Workflow ${runSuffix}`, id: wfRec.id });
+  } catch (err) {
+    result.skipped.push({ type: "workflow", name: "HubCLI Seed Workflow", reason: err instanceof CliError ? `${err.code}:${err.status} (Ops Hub Pro+ required)` : "error" });
+  }
+
+  // --- Attempt to create a blog (requires CMS Hub + connected domain — often fails) ---
+  // Documented failure mode: BLOG_HS_SITE_DOMAIN_WRITE_SCOPE_MISSING when no
+  // domain is connected. hubcli can't create a domain (that's a UI action),
+  // so we surface a clear tip.
+  try {
+    const existingBlogs = await client.request("/cms/v3/blogs/posts?limit=1") as { results?: Array<{ contentGroupId?: string }> };
+    if (!existingBlogs.results?.[0]?.contentGroupId) {
+      try {
+        await client.request("/content/api/v2/blogs", {
+          method: "POST",
+          body: { name: `HubCLI Seed Blog ${runSuffix}`, slug: `hubcli-seed-blog-${runSuffix}` },
+        });
+        result.created.push({ type: "blog", name: `HubCLI Seed Blog ${runSuffix}`, id: "new" });
+      } catch (err) {
+        const reason = err instanceof CliError ? (err.status === 403 ? "no connected domain (connect one in HubSpot Settings → Website → Domains first)" : `${err.code}:${err.status}`) : "error";
+        result.skipped.push({ type: "blog", name: "HubCLI Seed Blog", reason });
+        result.tips.push("Blog creation requires a connected domain. Go to HubSpot Settings → Website → Domains & URLs → Connect a domain, then re-run hubcli seed to create a blog + blog posts automatically.");
+      }
     }
   } catch { /* ignore */ }
 
