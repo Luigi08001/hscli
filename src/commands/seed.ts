@@ -441,6 +441,7 @@ async function runSeed(ctx: CliContext): Promise<void> {
           hs_title: `Quote — ${DEALS[i].dealname}`,
           hs_expiration_date: futureDate(30),
           hs_status: "DRAFT",
+          hs_language: "en",
         },
       });
       if (rec) {
@@ -482,15 +483,15 @@ async function runSeed(ctx: CliContext): Promise<void> {
     }
   }
 
-  // --- Goals (best-effort) ---
+  // --- Goals (best-effort; requires hs_assignee_user_id) ---
   for (const g of GOALS) {
     try {
-      const rec = await safeCreate(client, "/crm/v3/objects/goals", {
-        properties: {
-          hs_goal_name: g.hs_goal_name,
-          hs_goal_description: g.hs_goal_description,
-        },
-      });
+      const props: Record<string, string> = {
+        hs_goal_name: g.hs_goal_name,
+        hs_target_amount: "500000",
+      };
+      if (ownerId) props.hs_assignee_user_id = ownerId;
+      const rec = await safeCreate(client, "/crm/v3/objects/goal_targets", { properties: props });
       if (rec) result.created.push({ type: "goal", name: g.hs_goal_name, id: rec.id });
     } catch (err) {
       result.skipped.push({ type: "goal", name: g.hs_goal_name, reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
@@ -699,7 +700,7 @@ async function runSeed(ctx: CliContext): Promise<void> {
   // --- Blog authors + tags ---
   try {
     const authorRec = await safeCreate(client, "/cms/v3/blogs/authors", {
-      name: `HubCLI Seed Author ${runSuffix}`,
+      fullName: `HubCLI Seed Author ${runSuffix}`,
       email: `hubcli-seed-${runSuffix}@example.com`,
     });
     if (authorRec) result.created.push({ type: "blog_author", name: `HubCLI Seed Author ${runSuffix}`, id: authorRec.id });
@@ -744,6 +745,24 @@ async function runSeed(ctx: CliContext): Promise<void> {
     if (smtpRec) result.created.push({ type: "smtp_token", name: `HubCLI Seed Campaign ${runSuffix}`, id: smtpRec.id });
   } catch (err) {
     result.skipped.push({ type: "smtp_token", name: "HubCLI Seed Campaign", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
+  }
+
+  // --- Marketing email (draft) ---
+  try {
+    const mktgEmailName = `HubCLI Seed Email ${runSuffix}`;
+    const emailRec = await safeCreate(client, "/marketing/v3/emails/", {
+      name: mktgEmailName,
+      subject: "Test from HubCLI seed",
+      language: "en",
+      subcategory: "batch",
+      sendOnPublish: false,
+      useRssHeadlineAsSubject: false,
+      content: { html: "<p>Test content from hubcli seed.</p>" },
+      subscriptionDetails: { subscriptionId: 0 },
+    });
+    if (emailRec) result.created.push({ type: "marketing_email", name: mktgEmailName, id: emailRec.id });
+  } catch (err) {
+    result.skipped.push({ type: "marketing_email", name: "HubCLI Seed Email", reason: err instanceof CliError ? `${err.code}:${err.status}` : "error" });
   }
 
   // --- HubDB table (CMS Hub feature) ---
