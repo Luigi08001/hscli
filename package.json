@@ -36,13 +36,13 @@
     "audit"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/Luigi08001/hubcli#readme",
+  "homepage": "https://github.com/Luigi08001/hscli#readme",
   "bugs": {
-    "url": "https://github.com/Luigi08001/hubcli/issues"
+    "url": "https://github.com/Luigi08001/hscli/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Luigi08001/hubcli.git"
+    "url": "git+https://github.com/Luigi08001/hscli.git"
   },
   "author": "Luigi Vermeulen",
   "exports": {
