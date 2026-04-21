@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "description": "Strict compliance profile: writes only in business hours, every write requires a change ticket, all DELETEs blocked, GDPR endpoints require extra approval flow.",
+  "profiles": {
+    "default": {
+      "defaultAction": "allow",
+      "rules": [
+        {
+          "name": "gdpr-endpoints-need-approval",
+          "match": { "method": "*", "path": "**/gdpr-delete**" },
+          "action": "allow",
+          "requireApproval": "manual"
+        },
+        {
+          "name": "block-all-deletes",
+          "match": { "method": "DELETE", "path": "**" },
+          "action": "deny"
+        },
+        {
+          "name": "writes-require-change-ticket-and-hours",
+          "match": { "method": "POST", "path": "**" },
+          "action": "allow",
+          "requireChangeTicket": true,
+          "window": { "tz": "US/Eastern", "hours": "09-17", "days": "mon-fri" }
+        },
+        {
+          "name": "patches-require-change-ticket-and-hours",
+          "match": { "method": "PATCH", "path": "**" },
+          "action": "allow",
+          "requireChangeTicket": true,
+          "window": { "tz": "US/Eastern", "hours": "09-17", "days": "mon-fri" }
+        }
+      ]
+    }
+  }
+}

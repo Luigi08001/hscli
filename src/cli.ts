@@ -15,6 +15,8 @@ import { registerService } from "./commands/service/index.js";
 import { registerWebhooks } from "./commands/webhooks/index.js";
 import { registerSeed } from "./commands/seed/index.js";
 import { registerTrace } from "./commands/trace/index.js";
+import { registerPolicy } from "./commands/policy/index.js";
+import { registerAudit } from "./commands/audit/index.js";
 import { registerLists } from "./commands/lists/index.js";
 import { registerSales } from "./commands/sales/index.js";
 import { registerReporting } from "./commands/reporting/index.js";
@@ -118,6 +120,8 @@ export function createProgram(): { program: Command; getCtx: () => CliContext } 
   registerApi(program, () => ctx);
   registerSeed(program, () => ctx);
   registerTrace(program, () => ctx);
+  registerPolicy(program, () => ctx);
+  registerAudit(program, () => ctx);
   registerLists(program, () => ctx);
   registerSales(program, () => ctx);
   registerReporting(program, () => ctx);
