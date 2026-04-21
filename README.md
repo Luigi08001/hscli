@@ -1,4 +1,4 @@
-# hubcli
+# hscli
 
 [![CI](https://github.com/revfleet/hscli/actions/workflows/ci.yml/badge.svg)](https://github.com/revfleet/hscli/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@revfleet/hscli.svg)](https://www.npmjs.com/package/@revfleet/hscli)
@@ -35,7 +35,7 @@ That's the whole thing. For the full picture of what's available, read on.
 <details>
 <summary><strong>Full coverage map (55+ domains)</strong></summary>
 
-hubcli gives you one TypeScript binary that covers **every** endpoint of HubSpot's public API surface — verified against a scrape of HubSpot's own dev docs (1,178 source files, 1,180 endpoints). Whether an endpoint actually returns data on *your* portal depends on the HubSpot tier you're on (see [docs/TIERS.md](docs/TIERS.md)). hubcli exposes them all.
+hscli gives you one TypeScript binary that covers **every** endpoint of HubSpot's public API surface — verified against a scrape of HubSpot's own dev docs (1,178 source files, 1,180 endpoints). Whether an endpoint actually returns data on *your* portal depends on the HubSpot tier you're on (see [docs/TIERS.md](docs/TIERS.md)). hscli exposes them all.
 
 - **Full CRM** — contacts, companies, deals, tickets, leads, quotes, products, line items, orders, carts, discounts, fees, taxes, invoices, subscriptions, payments, goals, communications, users, feedback-submissions, custom objects, properties (+ legacy v1/v2), pipelines, associations v4 (+ labels CRUD + dated 2025-09), owners, imports, exports, engagements (notes/tasks/calls/meetings), sync, describe/validate, timeline, CRM Cards (UI Extensions), filter + count primitives on every object
 - **Marketing** — emails (v3 + legacy v1, per-email stats), campaigns, ads, social, SEO, landing pages, transactional, subscriptions, events (+ attendance + participations), behavioral events, forms, form integrations, legacy email events stream (per-recipient)
@@ -66,19 +66,18 @@ The HubSpot CLI + MCP space is crowded:
 - **[Composio](https://composio.dev/toolkits/hubspot)** — hosted SaaS MCP at `connect.composio.dev/mcp`, part of their 850-app adapter platform. Proprietary, they hold your token on their infra (SOC 2 Type 2).
 - **Community OSS MCP servers** — [peakmojo/mcp-hubspot](https://github.com/peakmojo/mcp-hubspot), [lkm1developer/hubspot-mcp-server](https://github.com/lkm1developer/hubspot-mcp-server), [shinzo-labs/hubspot-mcp](https://github.com/shinzo-labs/hubspot-mcp), [CData's hubspot-mcp-server](https://github.com/CDataSoftware/hubspot-mcp-server-by-cdata), and ~15 others on GitHub.
 
-hubcli's emphasis:
+hscli's emphasis:
 
-1. **CLI-first with MCP as a peer surface.** Every MCP tool has a matching `hubcli` command — same write gates, same redaction, same capability probing in both.
+1. **CLI-first with MCP as a peer surface.** Every MCP tool has a matching `hscli` command — same write gates, same redaction, same capability probing in both.
 2. **Self-hosted and token-sovereign.** Your HubSpot private app token never leaves your machine. Contrast with Composio.
 3. **Enterprise safety gates.** `--dry-run`, `--force`, policy files, change tickets, path scope allowlisting, idempotency keys. Most community MCP servers don't have these.
 4. **HubSpot-native engineering.** Reads HubSpot's `X-HubSpot-RateLimit-*` headers, proactive throttling, capability probing by `portalId + scopes`, offline schema validation, idempotency-key on every write.
-5. **Used in production.** Powers [CRMforge](https://crmforge.ai), the AI HubSpot consultant.
 
 Full landscape: [docs/LAUNCH/COMPETITIVE-LANDSCAPE.md](docs/LAUNCH/COMPETITIVE-LANDSCAPE.md).
 
 ## "100% coverage" — what that means
 
-hubcli's coverage claim is precise: **every one of HubSpot's 1,180 documented public API endpoints has a corresponding CLI subcommand.** This is verified against an automated scrape of HubSpot's developer documentation (committed at [docs/TESTING/PORTAL-147975758-COVERAGE.md](docs/TESTING/PORTAL-147975758-COVERAGE.md) and [PORTAL-147975758-WRITES.md](docs/TESTING/PORTAL-147975758-WRITES.md)).
+hscli's coverage claim is precise: **every one of HubSpot's 1,180 documented public API endpoints has a corresponding CLI subcommand.** This is verified against an automated scrape of HubSpot's developer documentation (committed at [docs/TESTING/PORTAL-147975758-COVERAGE.md](docs/TESTING/PORTAL-147975758-COVERAGE.md) and [PORTAL-147975758-WRITES.md](docs/TESTING/PORTAL-147975758-WRITES.md)).
 
 It does **not** mean every endpoint returns 2xx on your portal — HubSpot tier-locks hundreds of endpoints behind paid plans:
 
@@ -107,7 +106,7 @@ From source:
 
 ```bash
 git clone https://github.com/revfleet/hscli.git
-cd hubcli
+cd hscli
 npm install
 npm run build
 ```
@@ -131,8 +130,8 @@ Read:
 ```bash
 hscli crm contacts list --limit 5
 hscli marketing emails stats 123456
-hubcli sales sequences list
-hubcli reporting dashboards list
+hscli sales sequences list
+hscli reporting dashboards list
 hscli settings teams list
 ```
 
@@ -240,7 +239,7 @@ hscli --format yaml crm deals get 123               # YAML
 
 ## MCP: AI agents as first-class consumers
 
-hubcli ships a built-in MCP server over stdio with ~125 tools exposing the full surface:
+hscli ships a built-in MCP server over stdio with ~125 tools exposing the full surface:
 
 ```bash
 hscli mcp
@@ -271,7 +270,7 @@ See [docs/MCP.md](docs/MCP.md) for the full tool catalog.
 Probe portal capabilities and cache them by `portalId + scopes`:
 
 ```bash
-hubcli doctor capabilities --refresh
+hscli doctor capabilities --refresh
 ```
 
 Fail fast when a command hits an unsupported endpoint:
@@ -359,6 +358,3 @@ Issues and PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow,
 
 MIT — see [LICENSE](LICENSE).
 
----
-
-**Built as the foundation for [CRMforge](https://crmforge.ai)**, the AI HubSpot consultant. hubcli is open source so the ecosystem can build on it.

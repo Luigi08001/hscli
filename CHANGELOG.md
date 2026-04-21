@@ -1,13 +1,59 @@
 # Changelog
 
-## 0.7.1 - 2026-04-21
+## 0.7.1 - 2026-04-22
 
-**Stabilization release.** No new surface area — hardens v0.7.0 with a test
-suite, three practical tutorials, README updates, and a few small bug fixes
-around the contract-test harness and config paths.
+**Stabilization release.** Hardens v0.7.0 with a test suite, tutorials,
+README updates, and a round of bug fixes surfaced by Codex review —
+including two P1 auth-routing bugs that silently routed users to stale
+plaintext stores.
+
+### Fixes (Codex review)
+
+- **P1: `getHubcliHomeDir` — auth.enc was not a primary marker.** The
+  resolver only checked for `auth.json` to pick `~/.revfleet`, so a user
+  who migrated to the new home and encrypted the vault could be silently
+  routed back to a stale `~/.hubcli/auth.json`. Now both `auth.json` and
+  `auth.enc` anchor a location. ([src/core/auth.ts](src/core/auth.ts))
+- **P1: `auth encrypt` / `auth decrypt` bypassed the home-dir resolver.**
+  The commands hard-coded `HSCLI_HOME || ~/.revfleet`, so users still on
+  the legacy `~/.hubcli` fallback hit `No auth.json found to encrypt`
+  even though their active store existed. Now both commands go through
+  `getHubcliHomeDir()`. ([src/commands/auth/index.ts](src/commands/auth/index.ts))
+- **P2: Policy windows evaluated in UTC.** `isWithinWindow` used
+  `getUTCDay`/`getUTCHours` regardless of `window.tz`. `mon-fri,
+  US/Eastern` could allow a write late Friday Eastern (Saturday UTC) or
+  block early Monday Eastern (Sunday UTC). Both days and hours are now
+  resolved in `window.tz` (or system local when omitted) using
+  `Intl.DateTimeFormat`. ([src/core/policy.ts](src/core/policy.ts))
+- **P2: MCP telemetry never recorded `toolName`.** `executeTool` accepted
+  a third `toolName` argument but no callsite passed it, so
+  `hscli trace stats` / `hscli audit by-tool` couldn't break MCP
+  activity down by tool. Fixed structurally: a new `registerMcpTool`
+  wrapper sets `HUBCLI_MCP_TOOL_NAME` around every handler, so every
+  request made during an MCP tool call is automatically tagged.
+  ([src/mcp/server.ts](src/mcp/server.ts))
+- **P2: Trace session `includeBodies` + `scope` were written but never
+  enforced.** The HTTP client read only the session's `file` path.
+  `hscli trace start --scope write` still recorded GETs;
+  `--include-bodies` captured nothing. The client now consumes the full
+  session (file + scope + includeBodies) and filters telemetry by scope
+  + attaches request/response bodies when requested.
+  ([src/core/http.ts](src/core/http.ts))
+- **Minor: `hscli trace tail` required `<file>` even with an active
+  session.** Help text said the arg was optional; implementation
+  disagreed. `<file>` is now `[file]`.
+  ([src/commands/trace/index.ts](src/commands/trace/index.ts))
+- **Minor: README mixed `hubcli`/`hscli` + `HUBCLI_*`/`HSCLI_*`.** All
+  user-facing examples now use the current names.
 
 ### Tests
 
+### Tests
+
+- **`tests/bugfixes-v0.7.1.test.ts`** — 13 regression tests for every
+  fix listed above (auth.enc detection, legacy-fallback encryption,
+  tz-correct windows across the UTC boundary, MCP toolName tagging +
+  env cleanup, scope filtering read/write/all, includeBodies on/off).
 - **`tests/policy.test.ts`** — 20 tests covering `readPolicyFile`,
   glob matching (`*` vs `**`, method `*`, first-match-wins), v2 rule
   evaluation (`defaultAction`, `action: deny`, `requireChangeTicket`,

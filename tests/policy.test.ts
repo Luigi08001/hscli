@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -250,7 +250,7 @@ describe("policy", () => {
   it("enforceWritePolicy — window.days 'mon-fri' on Saturday → throws OUT_OF_WINDOW", () => {
     const saturday = new Date("2026-04-18T12:00:00Z"); // Saturday UTC
     const realDate = Date;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     (globalThis as any).Date = class extends realDate {
       constructor() { super(); return saturday; }
       static now() { return saturday.getTime(); }
@@ -273,7 +273,7 @@ describe("policy", () => {
       expect(() => enforceWritePolicy(makeCtx({ policyFile: f }), "POST", "/any"))
         .toThrowError(/outside its allowed time window/i);
     } finally {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       (globalThis as any).Date = realDate;
     }
   });
