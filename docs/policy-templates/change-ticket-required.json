@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "description": "Every POST/PATCH/PUT/DELETE must reference a change ticket via --change-ticket <id>. Reads are always allowed.",
+  "profiles": {
+    "default": {
+      "defaultAction": "allow",
+      "rules": [
+        {
+          "name": "writes-require-change-ticket",
+          "match": { "method": "POST", "path": "**" },
+          "action": "allow",
+          "requireChangeTicket": true
+        },
+        {
+          "name": "patches-require-change-ticket",
+          "match": { "method": "PATCH", "path": "**" },
+          "action": "allow",
+          "requireChangeTicket": true
+        },
+        {
+          "name": "puts-require-change-ticket",
+          "match": { "method": "PUT", "path": "**" },
+          "action": "allow",
+          "requireChangeTicket": true
+        },
+        {
+          "name": "deletes-require-change-ticket",
+          "match": { "method": "DELETE", "path": "**" },
+          "action": "allow",
+          "requireChangeTicket": true
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "description": "Allow writes only during business hours (9am-5pm, Mon-Fri) in US/Eastern timezone. Outside the window, POST/PATCH/PUT/DELETE are denied. Adjust 'tz' to match your portal.",
+  "profiles": {
+    "default": {
+      "defaultAction": "allow",
+      "rules": [
+        {
+          "name": "block-writes-outside-business-hours",
+          "match": { "method": "*", "path": "**" },
+          "action": "allow",
+          "window": {
+            "tz": "US/Eastern",
+            "hours": "09-17",
+            "days": "mon-fri"
+          }
+        }
+      ]
+    }
+  }
+}

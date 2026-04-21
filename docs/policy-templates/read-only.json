@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "description": "Block all writes on the 'default' profile. For ops/support engineers exploring a portal without risking accidental mutation.",
+  "profiles": {
+    "default": {
+      "defaultAction": "deny",
+      "rules": [
+        {
+          "name": "allow-all-reads",
+          "match": { "method": "GET", "path": "**" },
+          "action": "allow"
+        }
+      ],
+      "allowWrite": false
+    }
+  }
+}
