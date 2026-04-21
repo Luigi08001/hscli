@@ -8,10 +8,11 @@ alternate-path variant. Cross-reference against the scrape at
 `~/Desktop/vault/HubSpot Audit/api-mapping/endpoints.json` (1,180
 endpoints across 70 path roots) shows 1180 / 1180 covered.
 
-Positioning: hubcli is now the "headless-360 for HubSpot" — every portal
-operation that can be done through HubSpot's UI can be done through
-hubcli (with enterprise safety rails: policy-guarded writes, idempotency
-keys, rate-limit aware, read-only profiles, JSON/CSV/YAML output).
+Positioning: hubcli is now the **headless HubSpot** with full portal
+coverage — every portal operation that can be done through HubSpot's UI
+can be done through hubcli, with no UI dependency (enterprise safety
+rails: policy-guarded writes, idempotency keys, rate-limit aware,
+read-only profiles, JSON/CSV/YAML output).
 
 ### Added — 8 first-class CRM objects
 
