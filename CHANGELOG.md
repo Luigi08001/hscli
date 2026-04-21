@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.7.0 - 2026-04-21
+
+**Trust plane.** New `hscli policy` + `hscli audit` command groups give
+hscli the same operational-trust posture as Salesforce Agent Fabric —
+policy-as-code + audit-over-trace — but in open JSONL + JSON instead
+of a vendor-locked UI. Direct counter to the enterprise moat pillar.
+
+### New: hscli policy command group
+
+- `hscli policy list` — parse + summarize the active policy file.
+- `hscli policy show-matching <method> <path>` — which rule fires for a
+  given request? Use before shipping to verify intent.
+- `hscli policy validate [file]` — syntax + semantic check (invalid
+  enums, malformed windows, unnamed rules, etc.).
+- `hscli policy templates list|show|extract` — 5 built-in templates:
+  - `read-only` — denies all writes (default action: deny + allow-all-
+    reads rule).
+  - `business-hours` — writes only 9-17 Mon-Fri in a given timezone.
+  - `change-ticket-required` — every write needs `--change-ticket <id>`.
+  - `no-deletes` — POST/PATCH/PUT allowed, DELETE always denied.
+  - `compliance-strict` — combines the above (business hours + change
+    ticket + no deletes + GDPR endpoints require approval).
+
+### Enhanced policy schema (v2)
+
+Legacy v1 policy files still work. v2 adds:
+- **Glob path matching** — `"path": "**/gdpr-delete**"` matches anywhere.
+  `*` matches within a segment, `**` across segments.
+- **Time windows** — `"window": { "tz": "US/Eastern", "hours": "09-17",
+  "days": "mon-fri" }`. Enforced in the portal's declared timezone.
+- **`defaultAction`** — `"allow"` (current behavior) or `"deny"` (no-
+  rule-match → block). Enables zero-trust policy files.
+- **`requireApproval`** — marks paths as needing out-of-band approval.
+  Currently emits `POLICY_APPROVAL_REQUIRED` error; webhook/Slack
+  fulfillment lands in v0.7.1.
+- **Rate limit hooks** — `"rateLimit": { "maxPerHour": 10 }` schema
+  reserved. Enforcement lands in v0.7.1 alongside approvals.
+
+### New: hscli audit command group
+
+Reads any trace JSONL (single file or all `~/.revfleet/trace-*.jsonl`)
+and aggregates:
+- `hscli audit timeline` — chronological events, `--since 24h`,
+  `--writes-only`, `--limit N`.
+- `hscli audit who <profile>` — breakdown of what a profile did
+  (byMethod, byStatus, byPathRoot, last 10).
+- `hscli audit what <path-pattern>` — who touched an endpoint
+  (byProfile, byTool — MCP tool names — byMethod, recent writes).
+- `hscli audit writes [--since]` — all write ops, most security-relevant
+  view.
+- `hscli audit by-tool` — MCP tool breakdown: calls, writes, errors,
+  error rate, avg + max latency. Answers "which agent is chatty/buggy".
+
+### Package publishes `docs/policy-templates/`
+
+Templates are bundled in the npm tarball so `hscli policy templates
+list` works for any user with just `npm install @revfleet/hscli`.
+
+### Validation
+
+- 162 tests pass
+- 0 npm audit vulnerabilities
+- Policy enforcement verified end-to-end: `read-only` template
+  correctly blocks POST with `POLICY_DEFAULT_DENY` error.
+- Glob matching works (`**/gdpr-delete**`, `/crm/v3/objects/*`).
+- Time-window enforcement works via Intl.DateTimeFormat.
+- Audit timeline/who/what tested on live 3-event trace.
+
+---
+
 ## 0.6.0 - 2026-04-21
 
 **Session tracing + replay.** New `hscli trace` command group brings

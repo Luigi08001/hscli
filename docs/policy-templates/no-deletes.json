@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "description": "Allow POST/PATCH/PUT but block all DELETE operations. Good for environments where accidental deletion is expensive and archiving is preferred.",
+  "profiles": {
+    "default": {
+      "defaultAction": "allow",
+      "rules": [
+        {
+          "name": "block-all-deletes",
+          "match": { "method": "DELETE", "path": "**" },
+          "action": "deny"
+        }
+      ],
+      "allowDelete": false
+    }
+  }
+}
