@@ -169,8 +169,8 @@ def build_init_script(portal_id: str | None) -> str:
     mask_js = ""
     if portal_id:
         mask_js = (
-            "const portalRe = new RegExp(%s, 'g');" % json.dumps(portal_id)
-            + "const mask = '\\u2022'.repeat(%d);" % len(portal_id)
+            f"const portalRe = new RegExp({json.dumps(portal_id)}, 'g');"
+            f"const mask = '\\u2022'.repeat({len(portal_id)});"
             + """
             const scrub = (node) => {
               if (!node) return;
@@ -208,13 +208,13 @@ def build_init_script(portal_id: str | None) -> str:
             """
         )
 
-    return r"""
+    template = r"""
 (() => {
-  %s
+  __MASK_JS__
 
   // Narration banner — pulls current text from localStorage so it
-  // survives page.reload() calls. Style tuned for readability over
-  // HubSpot's content without obscuring the record details.
+  // survives page.reload() calls. Pinned to bottom-center as a big
+  // "what hscli just did / is about to do" callout.
   const bootBanner = () => {
     const text = window.localStorage.getItem('hscli_demo_banner') || '';
     if (!text) return;
@@ -223,14 +223,16 @@ def build_init_script(portal_id: str | None) -> str:
       el = document.createElement('div');
       el.id = 'hscli-demo-banner';
       el.style.cssText = [
-        'position:fixed', 'top:20px', 'right:20px', 'z-index:2147483647',
-        'background:rgba(17,17,27,0.96)', 'color:#a6e3a1',
-        'border:1px solid #45475a', 'border-radius:10px',
-        'padding:14px 18px', 'max-width:520px',
+        'position:fixed', 'bottom:40px', 'left:50%',
+        'transform:translateX(-50%)', 'z-index:2147483647',
+        'background:rgba(17,17,27,0.97)', 'color:#a6e3a1',
+        'border:1px solid #585b70', 'border-radius:14px',
+        'padding:22px 36px', 'min-width:560px', 'max-width:1000px',
+        'text-align:center',
         'font-family:ui-monospace,SFMono-Regular,Menlo,monospace',
-        'font-size:13px', 'line-height:1.45',
-        'box-shadow:0 10px 28px rgba(0,0,0,0.55)',
-        'backdrop-filter:blur(6px)',
+        'font-size:19px', 'line-height:1.4', 'font-weight:500',
+        'box-shadow:0 14px 40px rgba(0,0,0,0.6)',
+        'backdrop-filter:blur(8px)',
       ].join(';');
       document.documentElement.appendChild(el);
     }
@@ -245,7 +247,8 @@ def build_init_script(portal_id: str | None) -> str:
     childList: true, subtree: true,
   });
 })();
-""" % mask_js
+"""
+    return template.replace("__MASK_JS__", mask_js)
 
 
 # ───────────────────────────────────────────────────────────────────────────
@@ -309,20 +312,19 @@ async def capture_live_tour(portal_id: str | None, ui_domain: str) -> tuple[Path
 
         async def set_banner(text: str, hold_ms: int = 1500) -> None:
             """Set the narration banner and give viewers time to read it."""
-            safe = json.dumps(text)
             await page.evaluate(
-                f"""
-                (t) => {{
+                """
+                (t) => {
                   window.localStorage.setItem('hscli_demo_banner', t);
                   let el = document.getElementById('hscli-demo-banner');
-                  if (!el) {{
+                  if (!el) {
                     el = document.createElement('div');
                     el.id = 'hscli-demo-banner';
-                    el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:2147483647;background:rgba(17,17,27,0.96);color:#a6e3a1;border:1px solid #45475a;border-radius:10px;padding:14px 18px;max-width:520px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.45;box-shadow:0 10px 28px rgba(0,0,0,0.55);backdrop-filter:blur(6px)';
+                    el.style.cssText = 'position:fixed;bottom:40px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(17,17,27,0.97);color:#a6e3a1;border:1px solid #585b70;border-radius:14px;padding:22px 36px;min-width:560px;max-width:1000px;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:19px;line-height:1.4;font-weight:500;box-shadow:0 14px 40px rgba(0,0,0,0.6);backdrop-filter:blur(8px)';
                     document.documentElement.appendChild(el);
-                  }}
+                  }
                   el.textContent = t;
-                }}
+                }
                 """,
                 text,
             )
@@ -333,13 +335,40 @@ async def capture_live_tour(portal_id: str | None, ui_domain: str) -> tuple[Path
             await page.mouse.wheel(0, 700)
             await page.wait_for_timeout(700)
 
+        async def reveal_deals_panel() -> None:
+            """Specifically bring the Deals association panel into view.
+            HubSpot's right sidebar lists Contacts · Deals · Tickets · Companies
+            stacked vertically, so the Deals panel may be below the fold after
+            a scroll_to_associations(). Use a locator-based scroll so we land
+            on it regardless of viewport exact pixel count."""
+            for label in ("Deals (1)", "Deals (0)", "Deals"):
+                try:
+                    loc = page.locator(f"text=\"{label}\"").first
+                    if await loc.count():
+                        await loc.scroll_into_view_if_needed(timeout=2500)
+                        await page.wait_for_timeout(600)
+                        return
+                except Exception:
+                    continue
+            # Fallback: extra wheel scroll in case the locator variants didn't match
+            await page.mouse.wheel(0, 300)
+            await page.wait_for_timeout(500)
+
         async def wait_hubspot_settled(seconds: float = 2.0) -> None:
-            """HubSpot's SPA keeps polling after networkidle; give it time."""
-            try:
-                await page.wait_for_load_state("networkidle", timeout=10_000)
-            except Exception:
-                pass
+            """HubSpot's SPA keeps polling forever — don't wait on
+            networkidle. Just give the DOM a fixed slice of time to
+            render after domcontentloaded."""
             await page.wait_for_timeout(int(seconds * 1000))
+
+        async def refresh_company_page() -> None:
+            """Re-load the company page defensively. Uses goto with a
+            strict timeout so an archived-record redirect can't hang
+            the recording (as page.reload() did in testing)."""
+            try:
+                await page.goto(company_url, wait_until="domcontentloaded", timeout=20_000)
+            except Exception as e:  # noqa: BLE001
+                log("pw", f"goto({company_url}) timed out: {e} — continuing")
+            await wait_hubspot_settled(1.6)
 
         # ── Act 1: create empty company, open its page ────────────────────
         log("act", "1. create empty company, open the company page")
@@ -413,9 +442,10 @@ async def capture_live_tour(portal_id: str | None, ui_domain: str) -> tuple[Path
         await page.reload(wait_until="domcontentloaded")
         await wait_hubspot_settled(1.8)
         await scroll_to_associations()
+        await reveal_deals_panel()
         await set_banner(
             "↻ UI refreshed  → closedwon deal attached · contacts roster filled.",
-            hold_ms=2400,
+            hold_ms=2600,
         )
 
         # ── Act 5: show the deal page ─────────────────────────────────────
@@ -434,12 +464,57 @@ async def capture_live_tour(portal_id: str | None, ui_domain: str) -> tuple[Path
         await scroll_to_associations()
         await set_banner(
             "Deal opened — same company, same 2-person roster — all from the CLI.",
-            hold_ms=2500,
+            hold_ms=2400,
         )
+
+        # ── Act 6: DELETE — records disappear one at a time ───────────────
+        log("act", "6. back to company page, archive everything step by step")
+        await refresh_company_page()
+        await scroll_to_associations()
+        await reveal_deals_panel()
+        await set_banner(
+            "Full account — about to tear the fixture down.",
+            hold_ms=1400,
+        )
+
+        # Helper: DELETE → goto(company) → scroll, all tightened
+        async def delete_and_refresh(
+            label_before: str, kind_key: str, endpoint: list[str], label_after: str,
+        ) -> None:
+            await set_banner(label_before, hold_ms=900)
+            hscli_silent(*endpoint, ids[kind_key])
+            ids[kind_key] = None
+            await page.wait_for_timeout(900)
+            await refresh_company_page()
+            await scroll_to_associations()
+            await set_banner(label_after, hold_ms=1400)
+
+        await delete_and_refresh(
+            "$ hscli --force crm deals delete  → deal archived",
+            "deal_id", ["crm", "deals", "delete"],
+            "↻ Deals panel back to empty.",
+        )
+        await delete_and_refresh(
+            "$ hscli --force crm contacts delete  → Marcus archived",
+            "contact_ops", ["crm", "contacts", "delete"],
+            "↻ Only Elena remains on the account.",
+        )
+        await delete_and_refresh(
+            "$ hscli --force crm contacts delete  → Elena archived",
+            "contact_vp", ["crm", "contacts", "delete"],
+            "↻ Contacts panel empty again.",
+        )
+
+        await set_banner(
+            "$ hscli --force crm companies delete  → company archived",
+            hold_ms=1200,
+        )
+        hscli_silent("crm", "companies", "delete", ids["company_id"])
+        ids["company_id"] = None
 
         # ── Final hold ────────────────────────────────────────────────────
         await set_banner(
-            "Company · 2 contacts · 1 deal · 5 associations — entirely via hscli.",
+            "Blank → 1 company · 2 contacts · 1 deal · 5 associations → blank.  All via hscli.",
             hold_ms=2500,
         )
 
@@ -471,12 +546,16 @@ def convert_to_gif(src: Path, dest_gif: Path, dest_mp4: Path) -> None:
         check=True,
     )
 
+    # GIF — aggressive compression for README embed (target < 10 MB).
+    # 7 fps is still smooth for page reloads + banner updates.
+    # 850px width is readable for side-by-side panels.
+    # 96 colors is plenty for HubSpot's flat UI.
     palette = dest_gif.parent / ".demo-palette.png"
     subprocess.run(
         [
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             "-i", str(src),
-            "-vf", "fps=8,scale=900:-1:flags=lanczos,palettegen=max_colors=128",
+            "-vf", "fps=7,scale=850:-1:flags=lanczos,palettegen=max_colors=96",
             str(palette),
         ],
         check=True,
@@ -487,7 +566,7 @@ def convert_to_gif(src: Path, dest_gif: Path, dest_mp4: Path) -> None:
             "-i", str(src),
             "-i", str(palette),
             "-lavfi",
-            "fps=8,scale=900:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5",
+            "fps=7,scale=850:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5",
             str(dest_gif),
         ],
         check=True,
