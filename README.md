@@ -8,6 +8,10 @@
 
 **The headless HubSpot CLI + MCP server. 100% public API coverage (1,180 endpoints, 55+ command domains), enterprise safety rails, self-hosted.**
 
+![hscli demo — blank → full CRUD → blank, on a real HubSpot portal](docs/demo.gif)
+
+> 58-second screen recording of a real run against HubSpot EU1 portal `147975758`. Source: [`scripts/demo.sh`](scripts/demo.sh) + [`scripts/demo.tape`](scripts/demo.tape).
+
 ## Get started in 30 seconds
 
 ```bash
