@@ -532,6 +532,24 @@ async def capture_live_tour(portal_id: str | None, ui_domain: str) -> tuple[Path
 # ───────────────────────────────────────────────────────────────────────────
 
 
+def _save_unmasked_reference(src: Path) -> None:
+    """Dump a single unmasked frame to /tmp for manual mask-tuning.
+    Opt-in — only runs when HSCLI_DUMP_NAV_REFERENCE=1 is set."""
+    if os.environ.get("HSCLI_DUMP_NAV_REFERENCE") != "1":
+        return
+    ref = Path("/tmp/hscli-nav-reference.png")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+             "-ss", "3", "-i", str(src), "-frames:v", "1",
+             "-update", "1", str(ref)],
+            check=True,
+        )
+        log("demo", f"unmasked reference frame → {ref}")
+    except Exception as e:  # noqa: BLE001
+        log("demo", f"reference frame dump failed (non-fatal): {e}")
+
+
 def convert_to_gif(src: Path, dest_gif: Path, dest_mp4: Path) -> None:
     """Convert Playwright's webm → gif + mp4.
 
@@ -548,10 +566,22 @@ def convert_to_gif(src: Path, dest_gif: Path, dest_mp4: Path) -> None:
       (April 2026); revisit if HubSpot restyles the top bar.
     """
     dest_gif.parent.mkdir(parents=True, exist_ok=True)
+    _save_unmasked_reference(src)
 
-    # Dark slate matching HubSpot's own header tint so the mask looks
-    # like part of the UI chrome, not a post-production artifact.
-    mask_filter = "drawbox=x=1040:y=0:w=360:h=52:color=0x1f2937:t=fill"
+    # Dimensions match HubSpot's top app bar EXACTLY — measured against
+    # an unmasked reference frame: nav bar spans y=0–43 (h=44), followed
+    # by a 1-pixel separator at y=44 and white content from y=46. The
+    # mask's bottom edge aligns with the separator so there's no seam
+    # above or below the app-bar boundary.
+    #
+    # Color: pixel-sampled from the unmasked nav bar (R=41, G=62, B=80
+    # = #293E50). ffmpeg palette quantization rounds this to the closest
+    # available entry; the on-screen result is indistinguishable from
+    # the surrounding nav.
+    #
+    # Width: 360 px covers the trial counter + portal selector on the
+    # right side, starting after the "+ Assistant" button at x=1040.
+    mask_filter = "drawbox=x=1040:y=0:w=360:h=44:color=0x293E50:t=fill"
 
     subprocess.run(
         [
