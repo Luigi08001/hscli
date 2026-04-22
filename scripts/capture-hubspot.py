@@ -535,22 +535,29 @@ async def capture_live_tour(portal_id: str | None, ui_domain: str) -> tuple[Path
 def convert_to_gif(src: Path, dest_gif: Path, dest_mp4: Path) -> None:
     """Convert Playwright's webm → gif + mp4.
 
-    Crops the top 60 pixels off every frame to hide HubSpot's top
-    navigation bar, which contains the portal name, trial counter,
-    and account switcher — all of which identify the source portal
-    and shouldn't appear in a public demo. The breadcrumb in the
-    cropped row is non-essential; the record tabs (Overview /
-    Activities / etc.) live in the row below and stay visible.
+    Overlays a solid rectangle over the top-right of HubSpot's app
+    bar to hide the portal name + trial counter + account switcher,
+    which all identify the source portal. Using drawbox (not crop)
+    keeps the full frame visible including the breadcrumb row — the
+    rectangle reads as a deliberate redaction rather than a
+    camera-cut.
+
+    Mask coords (at the native 1400×860 capture):
+      x=1040, y=0, width=360, height=52 — covers from "+ Assistant"
+      through the right edge. Tuned against HubSpot's current UI
+      (April 2026); revisit if HubSpot restyles the top bar.
     """
     dest_gif.parent.mkdir(parents=True, exist_ok=True)
 
-    crop_filter = "crop=iw:ih-60:0:60"
+    # Dark slate matching HubSpot's own header tint so the mask looks
+    # like part of the UI chrome, not a post-production artifact.
+    mask_filter = "drawbox=x=1040:y=0:w=360:h=52:color=0x1f2937:t=fill"
 
     subprocess.run(
         [
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             "-i", str(src),
-            "-vf", crop_filter,
+            "-vf", mask_filter,
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
             "-crf", "23", "-preset", "medium",
             str(dest_mp4),
@@ -559,15 +566,12 @@ def convert_to_gif(src: Path, dest_gif: Path, dest_mp4: Path) -> None:
     )
 
     # GIF — aggressive compression for README embed (target < 10 MB).
-    # 7 fps is still smooth for page reloads + banner updates.
-    # 850px width is readable for side-by-side panels.
-    # 96 colors is plenty for HubSpot's flat UI.
     palette = dest_gif.parent / ".demo-palette.png"
     subprocess.run(
         [
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             "-i", str(src),
-            "-vf", f"{crop_filter},fps=7,scale=850:-1:flags=lanczos,palettegen=max_colors=96",
+            "-vf", f"{mask_filter},fps=7,scale=850:-1:flags=lanczos,palettegen=max_colors=96",
             str(palette),
         ],
         check=True,
@@ -578,7 +582,7 @@ def convert_to_gif(src: Path, dest_gif: Path, dest_mp4: Path) -> None:
             "-i", str(src),
             "-i", str(palette),
             "-lavfi",
-            f"{crop_filter},fps=7,scale=850:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5",
+            f"{mask_filter},fps=7,scale=850:-1:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5",
             str(dest_gif),
         ],
         check=True,
