@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.8.7 - 2026-04-23
+
+**Third docs pass + HubSpot open-source scan.** Reviewed
+[HubSpot/hubspot-local-dev-lib](https://github.com/HubSpot/hubspot-local-dev-lib),
+[HubSpot/hubspot-api-nodejs](https://github.com/HubSpot/hubspot-api-nodejs),
+and the official `hs` CLI source to find API paths HubSpot's own
+tooling hits but their public docs don't navigate to. Each discovery
+was probed live on portal 147975758.
+
+### Added
+
+- **`hscli cms hubdb export <tableId> --format CSV|XLSX|XLS [--output <path>]`** — export a HubDB table; writes to disk when `--output` is set, returns inline content otherwise.
+- **`hscli marketing emails revisions <emailId>`** — full revision history (`GET /marketing/v3/emails/{id}/revisions`).
+- **`hscli marketing emails revision-restore <emailId> <revisionId>`** — restore a past revision to DRAFT (surfaced from SDK, not in public dev-docs nav).
+- **`hscli marketing emails unpublish <emailId>`** — unpublish a published email.
+- **`hscli marketing emails draft-reset <emailId>`** — reset draft to the last-published state.
+- **`hscli workflows id-map <id>`** — resolve the v3 `workflowId` ↔ v4 `flowId` pair (reads `migrationStatus` from either API).
+
+### Fixes
+
+- **Endpoint allowlist expanded** to 6 more path families (hscli's own `INVALID_PATH_SCOPE` guard was blocking HubSpot-served paths):
+  - `/apps-dev/external/public/v3/*` — app install analytics
+  - `/apps-hublets/external/static-token/v3` — hublet app install
+  - `/dfs/v1/*`, `/dfs/deploy/v1/*`, `/dfs/deploy/v3/*`, `/dfs/logging/v1/*`, `/dfs/migrations/v1/*` — developer file system (used by `hs project upload`)
+  - `/project-components-external/v3/*` — new-in-2026 project upload-with-IR endpoint
+  - `/file-transport/v1/hubfiles/*` — HubFiles schemas (used by `hs hubfiles`)
+  - `/localdevauth/v1/*` — local-dev account linking
+
+### Known gap (⚠️)
+
+- **Multipart/form-data uploads** — hscli's HTTP client currently sends everything as `application/json`. HubSpot requires real multipart (with FormData-generated boundary) for 5 endpoint families: `cms/v3/source-code/*` uploads, `hubdb/*/draft/import`, `content/filemapper/v1/upload/*` (the legacy endpoint `hs upload` actually uses), `file-transport/v1/hubfiles/*`, `project-components-external/v3/upload/new-api`. One HTTP-client change unblocks all five. Called out in §12 roadmap + §13 of the capability library.
+
+### Docs
+
+- [docs/CAPABILITY_LIBRARY.md](docs/CAPABILITY_LIBRARY.md) gains a new §13 "Undocumented endpoints surfaced from HubSpot's open-source repos" — maps the GitHub findings to allowlist entries + multipart-required entries.
+
 ## 0.8.6 - 2026-04-23
 
 **Docs re-audit finds 4 more endpoints previously flagged as blocked.**

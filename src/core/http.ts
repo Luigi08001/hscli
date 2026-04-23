@@ -130,6 +130,21 @@ const ALLOWED_PATH_SCOPES = [
   "goals",
   // CMS content folder tree listing (used by design-manager tooling)
   "content-folders",
+  // App dev + portal install analytics (undocumented —
+  // /apps-dev/external/public/v3/{appId}/test-portal-installs,
+  // /full/portal, /install-counts-without-test-portals)
+  "apps-dev",
+  // Hublets static-token app install (undocumented)
+  "apps-hublets",
+  // Developer file system — projects upload, deploy, logs, migrations
+  // (used by `hs project upload` under the hood)
+  "dfs",
+  // New v3 project upload-with-IR endpoint (replaces dfs/v1 for apps)
+  "project-components-external",
+  // HubFiles custom-object schemas (used by `hs hubfiles`)
+  "file-transport",
+  // Local-dev-auth link flow (account linking)
+  "localdevauth",
 ];
 
 interface RollingQuotaState {
