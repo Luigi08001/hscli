@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { printResult } from "../../core/output.js";
 import { encodePathSegment, maybeWrite, parseJsonPayload, parseNumberFlag } from "../crm/shared.js";
@@ -17,7 +16,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .option("--after <cursor>", "Paging cursor")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
@@ -27,7 +26,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
 
   users.command("get").argument("<userId>").action(async (userId) => {
     const ctx = getCtx();
-    const client = new HubSpotClient(getToken(ctx.profile));
+    const client = createClient(ctx.profile);
     const res = await client.request(`/settings/v3/users/${encodePathSegment(userId, "userId")}`);
     printResult(ctx, res);
   });
@@ -37,7 +36,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .requiredOption("--data <payload>", "User creation payload JSON")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/settings/v3/users/", payload);
       printResult(ctx, res);
@@ -49,7 +48,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .requiredOption("--data <payload>", "User update payload JSON")
     .action(async (userId, opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "PUT", `/settings/v3/users/${encodePathSegment(userId, "userId")}`, payload);
       printResult(ctx, res);
@@ -60,7 +59,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .argument("<userId>")
     .action(async (userId) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await maybeWrite(ctx, client, "DELETE", `/settings/v3/users/${encodePathSegment(userId, "userId")}`);
       printResult(ctx, res);
     });
@@ -70,7 +69,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .description("List available user roles")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/settings/v3/users/roles");
       printResult(ctx, res);
     });
@@ -84,7 +83,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .option("--after <cursor>", "Paging cursor")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
@@ -99,7 +98,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .command("list")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/settings/v3/users/teams");
       printResult(ctx, res);
     });
@@ -111,7 +110,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .command("list")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/settings/v3/currencies");
       printResult(ctx, res);
     });
@@ -131,7 +130,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .option("--object-type <type>", "Filter by the object type the action was performed on")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
@@ -152,7 +151,7 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
     .requiredOption("--data <payload>", "GDPR delete payload JSON")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/crm/v3/objects/contacts/gdpr-delete", payload);
       printResult(ctx, res);

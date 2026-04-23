@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { printResult } from "../../core/output.js";
 import { parseNumberFlag } from "../crm/shared.js";
@@ -13,7 +12,7 @@ export function registerAccount(program: Command, getCtx: () => CliContext): voi
     .description("Get account details and usage")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/account-info/v3/details");
       printResult(ctx, res);
     });
@@ -30,7 +29,7 @@ export function registerAccount(program: Command, getCtx: () => CliContext): voi
     .option("--occurred-before <iso>", "Only events before ISO datetime")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
@@ -48,7 +47,7 @@ export function registerAccount(program: Command, getCtx: () => CliContext): voi
     .description("List private apps installed in the portal (integration audit proxy)")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/account-info/v3/api-usage/daily/private-apps");
       printResult(ctx, res);
     });
@@ -58,7 +57,7 @@ export function registerAccount(program: Command, getCtx: () => CliContext): voi
     .description("Daily API usage totals (portal-wide)")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/account-info/v3/api-usage/daily");
       printResult(ctx, res);
     });

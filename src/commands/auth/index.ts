@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
-import { HubSpotClient } from "../../core/http.js";
+import { createClient } from "../../core/http.js";
 import { getProfile, getToken, hasProfile, listProfiles, removeToken, saveProfile, saveToken, detectHublet, resolveApiDomain, getHscliHomeDir } from "../../core/auth.js";
 import type { CliContext } from "../../core/output.js";
 import { CliError, printResult } from "../../core/output.js";
@@ -75,13 +75,26 @@ export function registerAuth(program: Command, getCtx: () => CliContext): void {
     .option("--token <token>", "HubSpot private app token")
     .option("--token-stdin", "Read HubSpot private app token from stdin")
     .option("--profile <name>", "Profile name override")
+    .option("--no-verify", "Skip portal verification (token is saved without contacting HubSpot)")
     .action(async (opts) => {
       const ctx = getCtx();
       const profile = opts.profile ?? ctx.profile;
       const token = resolveLoginToken(opts);
+      const shouldVerify = opts.verify !== false;
+      const details = shouldVerify ? await fetchPortalDetails(token) : {};
+      const verificationFailed = shouldVerify && !details.portalId && !details.uiDomain;
+      if (verificationFailed) {
+        // Emit a loud warning but don't abort: the user may be on a
+        // restricted network or intentionally seeding a profile before
+        // the portal is reachable. `--no-verify` skips the check entirely.
+        console.error(
+          `[auth] WARNING: portal verification failed for '${profile}'. ` +
+          `Could not reach /account-info/v3/details or /integrations/v1/me. ` +
+          `Token has been saved but may be invalid. Re-run without this warning ` +
+          `once the portal is reachable, or pass --no-verify to silence.`,
+        );
+      }
       saveToken(profile, token);
-      const details = await fetchPortalDetails(token);
-      // Auto-detect hublet and resolve API domain
       const hublet = detectHublet({ token, uiDomain: details.uiDomain });
       const apiDomain = resolveApiDomain(hublet);
       if (details.portalId || details.uiDomain) {
@@ -93,6 +106,7 @@ export function registerAuth(program: Command, getCtx: () => CliContext): void {
         uiDomain: details.uiDomain ?? null,
         hublet: hublet ?? "na",
         apiDomain,
+        verified: shouldVerify && !verificationFailed,
       });
     });
 
@@ -116,8 +130,11 @@ export function registerAuth(program: Command, getCtx: () => CliContext): void {
   auth.command("token-info").option("--profile <name>", "Profile name override").description("Inspect token metadata/scopes").action(async (opts) => {
     const ctx = getCtx();
     const profile = opts.profile ?? ctx.profile;
+    const client = createClient(profile);
+    // The token is embedded in the URL path by HubSpot's design; trace
+    // events redact this path via redactTokenPath() in http.ts so the
+    // raw secret never hits disk.
     const token = getToken(profile);
-    const client = new HubSpotClient(token);
     const res = await client.request(`/oauth/v1/access-tokens/${encodeURIComponent(token)}`);
     printResult(ctx, { profile, tokenInfo: res });
   });

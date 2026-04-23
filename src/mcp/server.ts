@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { getToken, getApiBaseUrl } from "../core/auth.js";
-import { HubSpotClient } from "../core/http.js";
+import { createClient, HubSpotClient } from "../core/http.js";
+import { runWithTelemetryContext, withTelemetryContext } from "../core/telemetry-context.js";
 import { CliError, redactSensitive, type CliContext } from "../core/output.js";
 import {
   ENGAGEMENT_OBJECT_TYPES,
@@ -31,12 +31,18 @@ export interface McpBaseArgs {
   profile?: string;
   force?: boolean;
   dryRun?: boolean;
+  changeTicket?: string;
 }
 
 export const baseArgsSchema = {
   profile: z.string().min(1).optional(),
   force: z.boolean().optional(),
   dryRun: z.boolean().optional(),
+  changeTicket: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Change ticket / ops ID. Required by policies with requireChangeTicket=true; also threaded into trace/audit events."),
 };
 
 export function resolveProfile(requested?: string): string {
@@ -69,11 +75,17 @@ export function resolveProfile(requested?: string): string {
 function mcpContext(args: McpBaseArgs): CliContext {
   const force = Boolean(args.force);
   const dryRun = args.dryRun ?? !force;
+  const changeTicket = args.changeTicket?.trim()
+    || process.env.HSCLI_CHANGE_TICKET?.trim()
+    || undefined;
+  const policyFile = process.env.HSCLI_POLICY_FILE?.trim() || undefined;
   return {
     profile: resolveProfile(args.profile),
     json: true,
     dryRun,
     force,
+    ...(changeTicket ? { changeTicket } : {}),
+    ...(policyFile ? { policyFile } : {}),
   };
 }
 
@@ -95,12 +107,16 @@ function textResult(data: unknown): { content: Array<{ type: "text"; text: strin
 export async function executeTool(args: McpBaseArgs, fn: (ctx: CliContext, client: HubSpotClient) => Promise<unknown>) {
   try {
     const ctx = mcpContext(args);
-    const client = new HubSpotClient(getToken(ctx.profile), {
-      profile: ctx.profile,
+    const client = createClient(ctx.profile, {
       strictCapabilities: isEnvTrue(process.env.HSCLI_MCP_STRICT_CAPABILITIES),
-      apiBaseUrl: getApiBaseUrl(ctx.profile),
     });
-    const result = await fn(ctx, client);
+    // Extend the outer tool-name ALS scope with the changeTicket parsed
+    // from args so emitTelemetry() tags every HTTP event triggered by
+    // this MCP call with both toolName + changeTicket.
+    const result = await withTelemetryContext(
+      ctx.changeTicket ? { changeTicket: ctx.changeTicket } : {},
+      () => fn(ctx, client),
+    );
     return textResult(result);
   } catch (error) {
     const err = error instanceof CliError
@@ -132,23 +148,10 @@ export async function executeTool(args: McpBaseArgs, fn: (ctx: CliContext, clien
 export function registerMcpTool(server: McpServer, name: string, config: any, handler: (...args: any[]) => any): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wrapped = (...handlerArgs: any[]): any => {
-    const previous = process.env.HSCLI_MCP_TOOL_NAME;
-    process.env.HSCLI_MCP_TOOL_NAME = name;
-    const restore = () => {
-      if (previous === undefined) delete process.env.HSCLI_MCP_TOOL_NAME;
-      else process.env.HSCLI_MCP_TOOL_NAME = previous;
-    };
-    try {
-      const result = handler(...handlerArgs);
-      if (result && typeof (result as PromiseLike<unknown>).then === "function") {
-        return Promise.resolve(result as PromiseLike<unknown>).finally(restore);
-      }
-      restore();
-      return result;
-    } catch (err) {
-      restore();
-      throw err;
-    }
+    // AsyncLocalStorage scopes toolName to this invocation's async chain.
+    // Using process.env here was race-prone: two concurrent MCP calls
+    // would clobber each other's tool name and mis-attribute trace events.
+    return runWithTelemetryContext({ toolName: name }, () => handler(...handlerArgs));
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (server.registerTool as any)(name, config, wrapped);
