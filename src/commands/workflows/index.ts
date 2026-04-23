@@ -38,6 +38,56 @@ export function registerWorkflows(program: Command, getCtx: () => CliContext): v
     updatePath: (id) => `/automation/v4/flows/${id}`,
   });
 
+  // id-map — reconcile the v3 workflowId ↔ v4 flowId pair. Both
+  // values live inside the flow's `migrationStatus` object (v4
+  // response includes `workflowId`; v3 response includes `flowId`).
+  // HubSpot doesn't expose a dedicated mapping endpoint, so this
+  // wrapper does the lookup for you: pass either id, get both back.
+  workflows
+    .command("id-map")
+    .argument("<id>", "v3 workflowId or v4 flowId (auto-detected)")
+    .description("Resolve v3 workflowId ↔ v4 flowId pair for a workflow")
+    .action(async (id) => {
+      const ctx = getCtx();
+      const client = createClient(ctx.profile);
+      const segId = encodePathSegment(id, "id");
+      // Try v4 first (flowIds are numeric but can be distinguished by
+      // trying both endpoints; v4 flowIds tend to be 10-digit whereas
+      // v3 workflowIds are 8-digit — not reliable, so probe both).
+      let v3Id: string | undefined;
+      let v4Id: string | undefined;
+      let name: string | undefined;
+      try {
+        const v4 = (await client.request(`/automation/v4/flows/${segId}`)) as {
+          id?: string;
+          name?: string;
+          migrationStatus?: { workflowId?: number | string };
+        };
+        v4Id = v4.id ?? id;
+        name = v4.name;
+        v3Id = v4.migrationStatus?.workflowId !== undefined
+          ? String(v4.migrationStatus.workflowId)
+          : undefined;
+      } catch {
+        // Not a v4 flowId — try v3
+        try {
+          const v3 = (await client.request(`/automation/v3/workflows/${segId}`)) as {
+            id?: string | number;
+            name?: string;
+            migrationStatus?: { flowId?: number | string };
+          };
+          v3Id = String(v3.id ?? id);
+          name = v3.name;
+          v4Id = v3.migrationStatus?.flowId !== undefined
+            ? String(v3.migrationStatus.flowId)
+            : undefined;
+        } catch {
+          // Give up
+        }
+      }
+      printResult(ctx, { name, v3: v3Id, v4: v4Id });
+    });
+
   // Enable/disable a v4 flow. Requires PUT (not PATCH — 405 on PATCH)
   // with the full flow body including `revisionId`. Rediscovered via
   // the docs re-audit after earlier probes that used PATCH.

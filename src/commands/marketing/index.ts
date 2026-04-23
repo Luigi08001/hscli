@@ -67,6 +67,80 @@ export function registerMarketing(program: Command, getCtx: () => CliContext): v
         printResult(ctx, res);
       });
 
+    // Revision history for a marketing email. Useful for diffing
+    // edits across time or recovering a prior version.
+    emails
+      .command("revisions")
+      .argument("<emailId>", "Marketing email ID")
+      .option("--limit <n>", "Max revisions", "20")
+      .description("Get the revision history of a marketing email")
+      .action(async (emailId, opts) => {
+        const ctx = getCtx();
+        const client = new HubSpotClient(getToken(ctx.profile));
+        const id = encodePathSegment(emailId, "emailId");
+        const lim = encodeURIComponent(String(opts.limit ?? "20"));
+        const res = await client.request(
+          `/marketing/v3/emails/${id}/revisions?limit=${lim}`,
+        );
+        printResult(ctx, res);
+      });
+
+    // Restore a previous revision to draft. Endpoint verified live:
+    // POST /marketing/v3/emails/{id}/revisions/{revisionId}/restore-to-draft
+    // Surfaced from HubSpot's nodejs SDK (MarketingEmailsApi.ts) —
+    // not in the public dev-docs navigation.
+    emails
+      .command("revision-restore")
+      .argument("<emailId>", "Marketing email ID")
+      .argument("<revisionId>", "Revision ID to restore")
+      .description("Restore a past email revision to DRAFT")
+      .action(async (emailId, revisionId) => {
+        const ctx = getCtx();
+        const client = createClient(ctx.profile);
+        const id = encodePathSegment(emailId, "emailId");
+        const rid = encodePathSegment(revisionId, "revisionId");
+        const res = await maybeWrite(
+          ctx, client, "POST",
+          `/marketing/v3/emails/${id}/revisions/${rid}/restore-to-draft`,
+          {},
+        );
+        printResult(ctx, res);
+      });
+
+    // Unpublish a sent/scheduled email. Endpoint verified live.
+    emails
+      .command("unpublish")
+      .argument("<emailId>", "Marketing email ID")
+      .description("Unpublish a published email")
+      .action(async (emailId) => {
+        const ctx = getCtx();
+        const client = createClient(ctx.profile);
+        const id = encodePathSegment(emailId, "emailId");
+        const res = await maybeWrite(
+          ctx, client, "POST",
+          `/marketing/v3/emails/${id}/unpublish`,
+          {},
+        );
+        printResult(ctx, res);
+      });
+
+    // Reset draft back to last-published state.
+    emails
+      .command("draft-reset")
+      .argument("<emailId>", "Marketing email ID")
+      .description("Reset email draft to the last-published state")
+      .action(async (emailId) => {
+        const ctx = getCtx();
+        const client = createClient(ctx.profile);
+        const id = encodePathSegment(emailId, "emailId");
+        const res = await maybeWrite(
+          ctx, client, "POST",
+          `/marketing/v3/emails/${id}/draft/reset`,
+          {},
+        );
+        printResult(ctx, res);
+      });
+
     // Clone a marketing email — v3 endpoint rediscovered via a
     // docs re-audit (the id goes in the request body, not the path).
     emails

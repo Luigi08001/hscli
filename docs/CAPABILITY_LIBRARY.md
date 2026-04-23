@@ -96,6 +96,10 @@ All readable + writable via standard CRM endpoints:
 | Create DRAFT / AUTOMATED_DRAFT email | `hscli marketing emails create --data '{...}'` | ✅ | |
 | List / get / update / archive | `hscli marketing emails list|get|update` | ✅ | |
 | Per-email statistics | via `hscli api request --path "/marketing/v3/emails/statistics/{id}"` | ⚠️ | Per-email stats path `/marketing/v3/emails/{id}/statistics` returns 404. Aggregate stats live under `/email-events/v1/events` — use `hscli email-events campaign <campaignId>`. |
+| **Revision history** | `hscli marketing emails revisions <id>` | ✅ | `GET /marketing/v3/emails/{id}/revisions`. |
+| **Restore past revision to DRAFT** | `hscli marketing emails revision-restore <id> <revisionId>` | ✅ | `POST /marketing/v3/emails/{id}/revisions/{revisionId}/restore-to-draft`. |
+| **Unpublish** | `hscli marketing emails unpublish <id>` | ✅ | `POST /marketing/v3/emails/{id}/unpublish`. |
+| **Reset draft to last-published state** | `hscli marketing emails draft-reset <id>` | ✅ | `POST /marketing/v3/emails/{id}/draft/reset`. |
 | **Publish v3 email** | `hscli marketing emails publish <id>` | ✅ | `POST /marketing/v3/emails/{id}/publish`. Verified live. |
 | Create in published `AUTOMATED` state directly | n/a | ❌ | API explicitly rejects with *"Creating an email in the published state AUTOMATED is not allowed. Consider using AUTOMATED_DRAFT."* Use `create` + `publish` instead. |
 | Update state `AUTOMATED_DRAFT` → `AUTOMATED` via PATCH/PUT | n/a | ❌ | PATCH returns 400 "Error validating request"; PUT returns 405. Must use `/publish` endpoint. |
@@ -255,6 +259,7 @@ HubSpot exposes TWO public workflow APIs:
 | List / get / update v4 flow metadata | `hscli workflows flows list|get|update` | ✅ | |
 | **Populate `actions[]` on v4** | POST / PATCH `/automation/v4/flows` | ❌ | **Re-verified.** POST with `actions:[...]` → 500. PATCH → 405. Action schema is internal-only. **Workaround: create via v3 instead** — the same workflow surfaces on v4 (`migrationStatus.flowId`) with all actions intact. |
 | **Enable / disable a v4 flow** | `hscli workflows flows enable|disable <flowId>` | ✅ | `PUT /automation/v4/flows/{id}` with full flow body including `revisionId` and `isEnabled`. Verified live 2026-04-23. PATCH returns 405 (why we missed it first time) — PUT is the correct verb. |
+| **Resolve v3↔v4 workflow id pair** | `hscli workflows id-map <idV3OrV4>` | ✅ | No dedicated endpoint; wrapper reads `migrationStatus.flowId` / `migrationStatus.workflowId` from the v3 or v4 GET response. Useful for migration tooling + when you need to jump from one API to the other. |
 | Re-enroll contacts | `shouldReEnroll: true` in v4 flow; `allowContactToTriggerMultipleTimes` in v3 | ✅ | |
 
 #### v3 action catalog (what you can actually ship)
@@ -313,8 +318,10 @@ BRANCH example:
 
 ### HubDB (relational content tables)
 
-- `hscli cms hubdb tables create|list|update|delete|publish` ✅
+- `hscli cms hubdb create|list|get|rows|delete` ✅
+- **Export**: `hscli cms hubdb export <tableId> --format CSV|XLSX|XLS [--output <path>]` ✅ — returns file content inline or writes to disk.
 - Row CRUD + schema ✅
+- **Import** (CSV upload) | ⚠️ | `POST /cms/v3/hubdb/tables/{id}/draft/import` requires `multipart/form-data` with two parts (`config` JSON + `file` bytes). hscli can't emit multipart yet — same gap as CMS source-code upload. Fix unlocks both. |
 
 ### Source code + module library
 
@@ -523,6 +530,47 @@ Not HubSpot blocks — things hscli should add/fix:
 5. **`api request --content-type <type>`** — loosen the default JSON Content-Type to allow template uploads.
 6. **Allowlist expansion** — add `/feedback/*`, `/goals/v1/*` paths (see §11).
 7. **MCP tool auto-gen from `fields.json`** — every HubSpot module becomes a typed MCP tool with correct input schema.
+
+---
+
+## 13. Undocumented endpoints surfaced from HubSpot's open-source repos
+
+A GitHub scan of [HubSpot/hubspot-local-dev-lib](https://github.com/HubSpot/hubspot-local-dev-lib), [HubSpot/hubspot-api-nodejs](https://github.com/HubSpot/hubspot-api-nodejs), and the official `hs` CLI revealed API paths HubSpot's own tooling hits that are **not in developers.hubspot.com** navigation. hscli's allowlist now permits these paths (0.8.7+) — whether they return data depends on your token's scope.
+
+| Endpoint family | What it's for | Allowlist status | Scope |
+|---|---|---|---|
+| `/apps-dev/external/public/v3/*` | App-install analytics (test-portal installs, install counts, full portal details) | ✅ allowed | Dev-app token |
+| `/apps-hublets/external/static-token/v3` | Static-token app install | ✅ allowed | Dev-app token |
+| `/dfs/v1/*`, `/dfs/deploy/v1/*`, `/dfs/deploy/v3/*`, `/dfs/logging/v1/*`, `/dfs/migrations/v1/*` | Developer File System — projects upload, deploy, logs, migrations (used by `hs project upload`) | ✅ allowed | Dev-app token |
+| `/project-components-external/v3` | New v3 project upload-with-IR (replaces `dfs/v1/projects/upload/{name}` for apps) | ✅ allowed | Dev-app token |
+| `/file-transport/v1/hubfiles/*` | HubFiles custom-object schema upload (used by `hs hubfiles`) | ✅ allowed | Custom-object scopes |
+| `/localdevauth/v1/*` | Local-dev account linking flow | ✅ allowed | Standard |
+| `/content/filemapper/v1/upload/{urlencoded-dest}` | **The endpoint `hs upload` actually uses** (not `/cms/v3/source-code/*`) for theme/template uploads. Multipart with `file` field. | ✅ (under `content` scope) | Standard |
+| `/crm/v3/lists/{listId}/conversion/*` | List conversion schedule/update/cancel (added Sept 2025, not yet in docs) | ✅ (under `crm` scope) | Standard |
+
+### Multipart endpoints still ⚠️ (needs hscli HTTP-client fix)
+
+hscli currently sends everything as `application/json`. The following HubSpot endpoints require `multipart/form-data`:
+
+- `PUT /cms/v3/source-code/{env}/content/{path}` — custom module/template source
+- `POST /cms/v3/hubdb/tables/{id}/draft/import` — CSV row import (parts: `config` JSON + `file` bytes)
+- `POST /content/filemapper/v1/upload/{dest}` — theme/template upload (used by `hs upload`)
+- `POST /file-transport/v1/hubfiles/object-schemas` — custom-object schema file
+- `POST /project-components-external/v3/upload/new-api` — project zip + IR (3 parts: `projectFilesZip`, `platformVersion`, `uploadRequest`)
+
+**One HTTP-client change in hscli** (add multipart body support to `src/core/http.ts`) unlocks all 5. Tracked in §12 roadmap.
+
+### Additional endpoints documented only in HubSpot's own SDK
+
+From [HubSpot/hubspot-api-nodejs codegen](https://github.com/HubSpot/hubspot-api-nodejs):
+
+| Endpoint | CLI status |
+|---|---|
+| `POST /marketing/v3/emails/{id}/revisions/{rev}/restore-to-draft` | ✅ `hscli marketing emails revision-restore <id> <rev>` |
+| `POST /marketing/v3/emails/{id}/unpublish` | ✅ `hscli marketing emails unpublish <id>` |
+| `POST /marketing/v3/emails/{id}/draft/reset` | ✅ `hscli marketing emails draft-reset <id>` |
+| `POST /cms/v3/pages/site-pages/ab-test/rerun` (needs `AbTestRerunRequestVNext`) | ✅ (existing `hscli cms site-pages ab-test rerun`) |
+| `POST /crm/v3/lists/{listId}/conversion/{schedule|update|cancel}` (added Sept 2025) | ⚠️ Reachable via `hscli api request`; no first-class command yet |
 
 ---
 
