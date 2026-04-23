@@ -78,9 +78,19 @@ Install it alongside hscli:
 npm install hscli-plugin-analytics
 ```
 
-hscli scans `node_modules` at startup and loads any package with the `hscli-plugin` keyword.
+Auto-discovery is **opt-in** — since hscli handles bearer tokens,
+silently importing every `node_modules` package with a matching keyword
+is a supply-chain risk. To enable auto-discovery:
 
-### 2. HSCLI_PLUGINS env var (manual)
+```bash
+HSCLI_PLUGIN_AUTO_DISCOVER=1 hscli ...
+```
+
+When enabled, hscli prints the resolved package list to stderr before
+loading them, so a misconfigured `node_modules` can't inject token-path
+code silently. For production use, prefer the explicit allowlist below.
+
+### 2. HSCLI_PLUGINS env var (manual, always honored)
 
 For local development or private plugins:
 

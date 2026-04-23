@@ -29,8 +29,7 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { HubSpotClient } from "../core/http.js";
-import { getToken } from "../core/auth.js";
+import { createClient } from "../core/http.js";
 import type { McpBaseArgs } from "./server.js";
 import { resolveProfile, registerMcpTool, baseArgsSchema } from "./server.js";
 
@@ -96,7 +95,7 @@ async function fetchModuleSchema(
   modulePath: string,
   environment = "published",
 ): Promise<ModuleField[]> {
-  const client = new HubSpotClient(getToken(profile));
+  const client = createClient(profile);
   const encoded = cmsModulePath(modulePath)
     .split("/")
     .map((p) => encodeURIComponent(p))

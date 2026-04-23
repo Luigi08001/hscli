@@ -2,8 +2,11 @@
  * Plugin system for hscli.
  *
  * Plugins are discovered from:
- * 1. HSCLI_PLUGINS env var (comma-separated paths or package names)
- * 2. node_modules packages with "hscli-plugin" in keywords
+ * 1. HSCLI_PLUGINS env var (comma-separated paths or package names) — always honored.
+ * 2. node_modules packages with "hscli-plugin" in keywords — opt-in ONLY
+ *    when HSCLI_PLUGIN_AUTO_DISCOVER is truthy. Auto-discovery is off by
+ *    default because hscli holds bearer tokens; silently importing every
+ *    package with a matching keyword is a supply-chain risk.
  *
  * Each plugin must export: register(program: Command, context: PluginContext)
  */
@@ -86,6 +89,12 @@ function discoverFromEnv(): string[] {
   return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+function isTruthy(value: string | undefined): boolean {
+  if (!value) return false;
+  const v = value.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
 /**
  * Resolve a specifier to an importable path.
  */
@@ -110,8 +119,22 @@ export async function loadPlugins(program: Command, getCtx: () => CliContext): P
     maybeWrite,
   };
 
-  const specifiers = [...new Set([...discoverFromEnv(), ...discoverFromNodeModules()])];
+  const autoDiscover = isTruthy(process.env.HSCLI_PLUGIN_AUTO_DISCOVER);
+  const envSpecifiers = discoverFromEnv();
+  const autoSpecifiers = autoDiscover ? discoverFromNodeModules() : [];
+  const specifiers = [...new Set([...envSpecifiers, ...autoSpecifiers])];
   if (specifiers.length === 0) return;
+
+  if (autoDiscover && autoSpecifiers.length > 0) {
+    // Security surface note: auto-discovery is opt-in. Print the set we're
+    // about to load so a misconfigured node_modules can't silently
+    // inject code paths that handle HubSpot tokens.
+    console.error(
+      `[plugin] auto-discovery enabled — loading ${autoSpecifiers.length} ` +
+      `package(s) from node_modules with keyword "hscli-plugin": ${autoSpecifiers.join(", ")}. ` +
+      `Prefer pinning via HSCLI_PLUGINS for production use.`,
+    );
+  }
 
   for (const raw of specifiers) {
     const specifier = resolveSpecifier(raw);

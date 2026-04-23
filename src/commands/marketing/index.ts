@@ -2,8 +2,7 @@ import { Command } from "commander";
 import type { CliContext } from "../../core/output.js";
 import { registerResource } from "../domains/shared.js";
 import { encodePathSegment, maybeWrite } from "../crm/shared.js";
-import { getToken } from "../../core/auth.js";
-import { createClient, HubSpotClient } from "../../core/http.js";
+import { createClient } from "../../core/http.js";
 import { printResult } from "../../core/output.js";
 import { CliError } from "../../core/output.js";
 import { registerAds } from "./ads.js";
@@ -36,7 +35,7 @@ export function registerMarketing(program: Command, getCtx: () => CliContext): v
       .description("Per-email engagement metrics (opens, clicks, bounces, unsubscribes)")
       .action(async (emailId) => {
         const ctx = getCtx();
-        const client = new HubSpotClient(getToken(ctx.profile));
+        const client = createClient(ctx.profile);
         const res = await client.request(
           `/marketing/v3/emails/${encodePathSegment(emailId, "emailId")}/statistics`,
         );
@@ -76,7 +75,7 @@ export function registerMarketing(program: Command, getCtx: () => CliContext): v
       .description("Get the revision history of a marketing email")
       .action(async (emailId, opts) => {
         const ctx = getCtx();
-        const client = new HubSpotClient(getToken(ctx.profile));
+        const client = createClient(ctx.profile);
         const id = encodePathSegment(emailId, "emailId");
         const lim = encodeURIComponent(String(opts.limit ?? "20"));
         const res = await client.request(

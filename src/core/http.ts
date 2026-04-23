@@ -1,4 +1,5 @@
-import { CliError } from "./output.js";
+import { CliError, redactSensitive } from "./output.js";
+import { getTelemetryContext } from "./telemetry-context.js";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -37,6 +38,27 @@ function readActiveTraceSession(): ActiveTraceSession | undefined {
 import { mapEndpointAvailabilityError, preflightEndpointCapability, recordEndpointSuccess } from "./capabilities.js";
 import { getToken, getApiBaseUrl } from "./auth.js";
 import { enforcePermissionProfile } from "./permissions.js";
+
+/**
+ * Paths where HubSpot embeds a raw token in the URL (notably
+ * `/oauth/v1/access-tokens/{token}`). We replace the trailing segment
+ * so trace/audit JSONL never captures the token verbatim.
+ */
+const TOKEN_IN_PATH_PREFIXES = [
+  "/oauth/v1/access-tokens/",
+  "/oauth/v1/refresh-tokens/",
+];
+function redactTokenPath(path: string): string {
+  for (const prefix of TOKEN_IN_PATH_PREFIXES) {
+    if (path.startsWith(prefix)) {
+      const after = path.slice(prefix.length);
+      const next = after.indexOf("/");
+      const rest = next >= 0 ? after.slice(next) : "";
+      return `${prefix}[REDACTED]${rest}`;
+    }
+  }
+  return path;
+}
 
 /**
  * Create a HubSpotClient that is hublet-aware.
@@ -415,15 +437,26 @@ export class HubSpotClient {
       if (this.traceScope === "write" && !isWrite) return;
     }
     try {
-      // Baseline event: always includes ts + requestId + profile. toolName
-      // is set from HSCLI_MCP_TOOL_NAME so MCP tool invocations show up
-      // distinctly in `hscli trace stats` (byToolName breakdown).
+      // Redact path (e.g. /oauth/v1/access-tokens/<TOKEN>) and bodies
+      // before persisting to disk. The trace help text advertises
+      // "redacted for secrets" — this is where that guarantee is kept.
+      const safePath = redactTokenPath(event.path);
+      const safeEvent = {
+        ...event,
+        path: safePath,
+        ...(event.requestBody !== undefined ? { requestBody: redactSensitive(event.requestBody) } : {}),
+        ...(event.responseBody !== undefined ? { responseBody: redactSensitive(event.responseBody) } : {}),
+        ...(event.error ? { error: redactSensitive(event.error) } : {}),
+      };
+      // Baseline event: always includes ts + requestId + profile.
+      // toolName comes from AsyncLocalStorage (set by the MCP handler
+      // wrapper) so concurrent MCP calls don't race on a process-global.
       appendFileSync(this.telemetryFile, JSON.stringify({
         ts: new Date().toISOString(),
         requestId: this.requestId,
         profile: this.profile,
-        toolName: process.env.HSCLI_MCP_TOOL_NAME?.trim() || undefined,
-        ...event,
+        toolName: getTelemetryContext()?.toolName,
+        ...safeEvent,
       }) + "\n", "utf8");
     } catch {
       // Telemetry must not break CLI execution.

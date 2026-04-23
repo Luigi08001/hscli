@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.8.9 - 2026-04-23
+
+**Security hardening + hublet routing completeness.** Addresses five
+audit findings against 0.8.8 (Codex review on `revfleet/hscli@2e169f0`).
+
+### Fixed — P1: trace/audit logs could leak tokens
+
+- `src/core/http.ts` now redacts the telemetry event before writing to
+  the JSONL. Request bodies, response bodies, and error strings pass
+  through `redactSensitive()` from `core/output.ts`. The request path
+  is also run through a new `redactTokenPath()` helper that replaces
+  the token segment on `/oauth/v1/access-tokens/{token}` and
+  `/oauth/v1/refresh-tokens/{token}`, so `hscli auth token-info`
+  traces no longer capture the raw secret.
+- The trace-help text (`hscli trace start --include-bodies` —
+  "redacted for secrets") now matches actual behavior.
+
+### Fixed — P1: several commands bypassed hublet routing
+
+Commands instantiating `new HubSpotClient(getToken(profile))` directly
+fell back to `api.hubapi.com` regardless of the profile's `hublet`
+setting, so EU1/AP portal writes silently hit the wrong base URL.
+
+Swapped to `createClient(profile)` (which resolves `getApiBaseUrl`)
+across: `commands/account`, `commands/auth` (`token-info`),
+`commands/communication-preferences`, `commands/events`,
+`commands/marketing` (helper path), `commands/settings`,
+`mcp/server` (`executeTool`), `mcp/hubspot-modules`.
+
+### Fixed — P2: MCP cannot provide change tickets
+
+`baseArgsSchema` and `McpBaseArgs` now include an optional
+`changeTicket` field. `mcpContext()` threads it into the `CliContext`
+so policies with `requireChangeTicket: true` accept MCP writes.
+`HSCLI_POLICY_FILE` and `HSCLI_CHANGE_TICKET` are also honored as
+env-level fallbacks so agents can inject the ticket without a code
+change.
+
+### Fixed — P2: MCP tool-name attribution was process-global
+
+`registerMcpTool()` previously mutated `process.env.HSCLI_MCP_TOOL_NAME`
+around the async handler, so two concurrent MCP calls would clobber
+each other's tool name. Replaced with `AsyncLocalStorage` in a new
+`core/telemetry-context.ts` module. `emitTelemetry()` in `http.ts`
+reads `toolName` from the ALS store, which is scoped to each
+invocation's async chain.
+
+### Fixed — P2: plugin auto-discovery is now opt-in
+
+`core/plugins.ts` no longer imports every `node_modules` package with
+keyword `hscli-plugin` by default. Auto-discovery runs only when
+`HSCLI_PLUGIN_AUTO_DISCOVER=1`, and when it does, hscli prints the
+resolved package list to stderr before loading. Explicit `HSCLI_PLUGINS`
+allowlist is always honored. Documented in `docs/PLUGIN_GUIDE.md`.
+
+### Added — `auth login` portal verification warning
+
+`hscli auth login` now warns loudly on stderr when the token was saved
+but `/account-info/v3/details` and `/integrations/v1/me` both failed —
+previously the command succeeded silently with an unverifiable token.
+`--no-verify` skips the check for offline/restricted-network setups.
+
+### Changed — packaging
+
+`files` in `package.json` now includes `docs/*.md` so the README's
+doc links resolve after `npm install`. Previously only
+`docs/policy-templates/` was shipped.
+
+### Changed — product positioning
+
+`package.json.description` rewritten: "~all documented public
+endpoints" instead of "100% public API coverage". Reachability is
+tier/scope/auth-model/deprecation-gated; see `docs/CAPABILITY_LIBRARY.md`
+for the ❌/⚠️/✅ matrix.
+
 ## 0.8.8 - 2026-04-23
 
 **Multipart HTTP support + MCP drag-and-drop module tools.** Two

@@ -1,6 +1,5 @@
 import { Command } from "commander";
-import { getToken } from "../../core/auth.js";
-import { HubSpotClient } from "../../core/http.js";
+import { createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { printResult } from "../../core/output.js";
 import { encodePathSegment, maybeWrite, parseJsonPayload } from "../crm/shared.js";
@@ -13,7 +12,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .description("List subscription types")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/communication-preferences/v3/definitions");
       printResult(ctx, res);
     });
@@ -24,7 +23,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .description("Get subscription status for an email address")
     .action(async (email) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request(`/communication-preferences/v3/status/email/${encodePathSegment(email, "email")}`);
       printResult(ctx, res);
     });
@@ -35,7 +34,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .description("Subscribe a contact")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/communication-preferences/v3/subscribe", payload);
       printResult(ctx, res);
@@ -47,7 +46,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .description("Unsubscribe a contact")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/communication-preferences/v3/unsubscribe", payload);
       printResult(ctx, res);
@@ -60,7 +59,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .requiredOption("--data <payload>", "Batch input JSON: { inputs: [{ subscriberIdString, channel, subscriptionId }, ...] }")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await client.request("/communication/preferences/v4/statuses/batch-read", { method: "POST", body: payload });
       printResult(ctx, res);
@@ -70,7 +69,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .requiredOption("--data <payload>", "Batch update payload JSON")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/communication/preferences/v4/statuses/batch-update", payload);
       printResult(ctx, res);
@@ -80,7 +79,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .requiredOption("--data <payload>", "Batch subscribe payload JSON")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/communication/preferences/v4/subscribe-batch", payload);
       printResult(ctx, res);
@@ -90,7 +89,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .requiredOption("--data <payload>", "Batch unsubscribe payload JSON")
     .action(async (opts) => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", "/communication/preferences/v4/unsubscribe-batch", payload);
       printResult(ctx, res);
@@ -99,7 +98,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .description("List subscription definitions (v4)")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/communication/preferences/v4/subscriptions");
       printResult(ctx, res);
     });
@@ -107,7 +106,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .description("List supported channels (email, sms, whatsapp, etc.)")
     .action(async () => {
       const ctx = getCtx();
-      const client = new HubSpotClient(getToken(ctx.profile));
+      const client = createClient(ctx.profile);
       const res = await client.request("/communication/preferences/v4/channels");
       printResult(ctx, res);
     });
