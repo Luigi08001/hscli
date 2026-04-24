@@ -39,7 +39,7 @@ High-level map of every hscli command. For detailed args and examples per comman
 
 ## Guide
 
-- `hscli ui` / `hscli home` — terminal home for operator workflows and current profile context
+- `hscli ui` / `hscli home` — terminal home for profile context, safety state, next action, and operator workflows
 - `hscli guide [--goal portal-migration|setup|read|fetch|write|guardrails|property-preflight|audit-trace|explore]` — guided workflows for common operator tasks
 - `hscli /migration` — portal/schema migration workflow
 - `hscli /setup` — auth, hublet routing, scopes, and capability setup

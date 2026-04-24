@@ -18,7 +18,9 @@ HubSpot rate budget.
   `/read`, `/fetch` (`/get`), `/write`, and `/guardrails`, with non-slash aliases for
   shell environments that prefer plain command names.
 - `hscli ui` / `hscli home` terminal home for profile context and
-  operator workflow selection.
+  operator workflow selection; it now surfaces profile roles,
+  read/write safety state, policy/trace status, API-usage guidance,
+  and a recommended next command.
 - `auth set-hublet <profile> <hublet>` plus global `--hublet` /
   `--api-base-url` routing overrides for explicit EU/AP/NA hublet
   control.

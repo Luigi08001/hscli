@@ -1183,13 +1183,21 @@ describe("hscli", () => {
     expect(output.data.profile).toMatchObject({
       profile: "default",
       authenticated: true,
+      role: "CURRENT",
       portalId: "12345678",
       hublet: "eu1",
       apiBaseUrl: "https://api-eu1.hubapi.com",
       mode: "read-only",
     });
+    expect(output.data.safety).toMatchObject({
+      label: "read-only",
+      profileMode: "read-only",
+      policy: { active: false, status: "off" },
+      trace: { active: false, mode: "off" },
+    });
+    expect(output.data.recommendation).toBe("hscli policy templates extract read-only --to ./policy.json");
     expect(output.data.workflow.goal).toBe("fetch");
-    expect(output.data.choices).toContain("4  /fetch      get records or metadata without mutation");
+    expect(output.data.choices).toContain("4  /fetch       get records or metadata without mutation");
   });
 
   it("exports recoverable CRM activities for one record", async () => {
