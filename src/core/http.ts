@@ -70,6 +70,25 @@ export function createClient(profile: string, options: Omit<HubSpotClientOptions
   return new HubSpotClient(token, { ...options, apiBaseUrl, profile });
 }
 
+export function createBrowserSessionClient(
+  profile: string,
+  options: Omit<HubSpotClientOptions, "auth" | "skipCapabilityPreflight"> & {
+    cookie: string;
+    csrfToken: string;
+  },
+): HubSpotClient {
+  return new HubSpotClient("", {
+    ...options,
+    profile,
+    auth: {
+      kind: "browser-session",
+      cookie: options.cookie,
+      csrfToken: options.csrfToken,
+    },
+    skipCapabilityPreflight: true,
+  });
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
@@ -119,6 +138,12 @@ interface HubSpotClientOptions {
   strictCapabilities?: boolean;
   /** Override the API base URL (e.g. "https://api-eu1.hubapi.com" for EU1 portals). */
   apiBaseUrl?: string;
+  auth?: {
+    kind: "browser-session";
+    cookie: string;
+    csrfToken: string;
+  };
+  skipCapabilityPreflight?: boolean;
 }
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -141,6 +166,7 @@ const ALLOWED_PATH_SCOPES = [
   "communication-preferences",
   "webhooks",
   "account-info",
+  "api",
   "integrations",
   "analytics",
   "email",
@@ -222,6 +248,8 @@ export class HubSpotClient {
   private readonly traceIncludeBodies: boolean;
   private readonly profile: string;
   private readonly strictCapabilities: boolean;
+  private readonly auth?: HubSpotClientOptions["auth"];
+  private readonly skipCapabilityPreflight: boolean;
   private readonly rateLimitState: RateLimitSnapshot = { nextRequestAtMs: 0 };
   // Portal timezone (e.g. "US/Eastern"). Fetched lazily from
   // /account-info/v3/details the first time daily quota headers appear,
@@ -256,6 +284,8 @@ export class HubSpotClient {
       : isEnvTrue(process.env.HSCLI_TRACE_BODIES);
     this.profile = options.profile?.trim() || process.env.HSCLI_PROFILE?.trim() || "default";
     this.strictCapabilities = options.strictCapabilities ?? isEnvTrue(process.env.HSCLI_STRICT_CAPABILITIES);
+    this.auth = options.auth;
+    this.skipCapabilityPreflight = Boolean(options.skipCapabilityPreflight);
   }
 
   async request(path: string, options: RequestOptions = {}, attempt = 0): Promise<unknown> {
@@ -267,11 +297,13 @@ export class HubSpotClient {
     const startedAt = Date.now();
 
     await this.beforeRateLimitedRequest(pathname);
-    preflightEndpointCapability({
-      profile: this.profile,
-      path: pathname,
-      strict: this.strictCapabilities,
-    });
+    if (!this.skipCapabilityPreflight) {
+      preflightEndpointCapability({
+        profile: this.profile,
+        path: pathname,
+        strict: this.strictCapabilities,
+      });
+    }
 
     try {
       // Multipart takes precedence. When set, we build a FormData
@@ -282,10 +314,16 @@ export class HubSpotClient {
       // HubSpot's 415 "Unsupported Media Type" responses.
       let bodyToSend: string | FormData | undefined;
       const headers: Record<string, string> = {
-        Authorization: `Bearer ${this.token}`,
         "X-Hubcli-Request-Id": this.requestId,
         ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       };
+      if (this.auth?.kind === "browser-session") {
+        headers.Cookie = this.auth.cookie;
+        headers["x-hubspot-csrf-hubspotapi"] = this.auth.csrfToken;
+        headers.Accept = "application/json";
+      } else {
+        headers.Authorization = `Bearer ${this.token}`;
+      }
       if (options.multipart) {
         const { readFile } = await import("node:fs/promises");
         const { basename } = await import("node:path");
@@ -345,7 +383,7 @@ export class HubSpotClient {
           attempt,
           ...(this.traceIncludeBodies ? { requestBody: options.body, responseBody: details } : {}),
         });
-        const endpointError = mapEndpointAvailabilityError({
+        const endpointError = this.skipCapabilityPreflight ? undefined : mapEndpointAvailabilityError({
           profile: this.profile,
           path: pathname,
           statusCode: response.status,
@@ -355,7 +393,9 @@ export class HubSpotClient {
         throw new CliError("HTTP_ERROR", `HubSpot API request failed (${response.status})`, response.status, details);
       }
 
-      recordEndpointSuccess({ profile: this.profile, path: pathname, statusCode: response.status });
+      if (!this.skipCapabilityPreflight) {
+        recordEndpointSuccess({ profile: this.profile, path: pathname, statusCode: response.status });
+      }
       if (response.status === 204) {
         this.emitTelemetry({
           method,
@@ -570,6 +610,10 @@ export class HubSpotClient {
    * quota tracking still works, just off by a few hours for non-UTC portals.
    */
   private ensurePortalTimeZoneFetched(): void {
+    if (this.auth?.kind === "browser-session") {
+      this.portalTimeZone = "UTC";
+      return;
+    }
     if (this.portalTimeZone || this.portalTimeZoneFetching) return;
     const url = this.resolveUrl("/account-info/v3/details");
     this.portalTimeZoneFetching = (async () => {

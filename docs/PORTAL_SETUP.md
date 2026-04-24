@@ -153,7 +153,8 @@ Install the HubSpot tracking code on your website:
 3. Assign a permission set (determines what they can do)
 4. Users receive an email invitation and must accept
 
-> **API:** Yes — `settings.users.read/write` scopes. The User Provisioning API (`/settings/v3/users`) supports inviting and managing users.
+> **API:** Yes — `settings.users.read/write` scopes. The User Provisioning API (`/settings/v3/users`) supports inviting and managing users. Permission sets are available through an internal HubSpot session-auth endpoint in hscli:
+> `hscli settings permission-sets create --portal-id <id> --cookie-file cookies.txt --csrf <token> --data '{...}' --force`.
 
 ### 3.2 Create Teams
 
@@ -657,7 +658,7 @@ hscli crm deals search --data '{"filterGroups":[], "limit": 1}' --json 2>/dev/nu
 | Email auth | DKIM, SPF | None (DNS manual) | — |
 | Tracking code | JS snippet | Push events only | — |
 | Privacy/consent | GDPR, cookie banner | Partial | — |
-| Users | Invite, permissions | Full CRUD | — |
+| Users | Invite, permissions | Full CRUD; permission sets require session auth | `hscli settings users list`, `hscli settings permission-sets list` |
 | Owners | List portal owners | Read | `hscli crm owners list` |
 | Properties | Object fields | Full CRUD | `hscli crm properties list/create/update` |
 | Pipelines | Deal/ticket stages | Full CRUD | `hscli crm pipelines list/get` |

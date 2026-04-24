@@ -1,8 +1,224 @@
 import { Command } from "commander";
-import { createClient } from "../../core/http.js";
+import { readFileSync } from "node:fs";
+import { getProfile } from "../../core/auth.js";
+import { createBrowserSessionClient, createClient, HubSpotClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
-import { printResult } from "../../core/output.js";
+import { CliError, printResult } from "../../core/output.js";
 import { encodePathSegment, maybeWrite, parseJsonPayload, parseNumberFlag } from "../crm/shared.js";
+
+interface BrowserSessionOptions {
+  portalId?: string;
+  uiDomain?: string;
+  cookie?: string;
+  cookieFile?: string;
+  csrf?: string;
+}
+
+function addBrowserSessionOptions(command: Command): Command {
+  return command
+    .option("--portal-id <id>", "HubSpot portal ID (or HSCLI_PORTAL_ID / profile.portalId)")
+    .option("--ui-domain <domain>", "HubSpot app domain, e.g. app.hubspot.com or app-eu1.hubspot.com")
+    .option("--cookie <header>", "Browser Cookie header for app.hubspot.com")
+    .option("--cookie-file <path>", "Cookie header, Netscape cookie jar, or JSON cookie export")
+    .option("--csrf <token>", "x-hubspot-csrf-hubspotapi header value");
+}
+
+function resolvePermissionSetSession(
+  ctx: CliContext,
+  opts: BrowserSessionOptions,
+): { client: HubSpotClient; portalId: string } {
+  const profile = safeProfile(ctx.profile);
+  const portalId = firstString(opts.portalId, process.env.HSCLI_PORTAL_ID, profile?.portalId);
+  if (!portalId) {
+    throw new CliError("SESSION_PORTAL_ID_REQUIRED", "Permission-set commands require --portal-id, HSCLI_PORTAL_ID, or profile.portalId.");
+  }
+
+  const uiDomain = normalizeUiDomain(firstString(
+    opts.uiDomain,
+    process.env.HSCLI_HUBSPOT_UI_DOMAIN,
+    profile?.uiDomain,
+    "app.hubspot.com",
+  ) ?? "app.hubspot.com");
+  const cookie = firstString(
+    opts.cookie,
+    process.env.HSCLI_HUBSPOT_COOKIE,
+  ) ?? readCookieFile(firstString(opts.cookieFile, process.env.HSCLI_HUBSPOT_COOKIE_FILE));
+  if (!cookie) {
+    throw new CliError(
+      "SESSION_COOKIE_REQUIRED",
+      "Permission-set commands require --cookie, --cookie-file, HSCLI_HUBSPOT_COOKIE, or HSCLI_HUBSPOT_COOKIE_FILE.",
+    );
+  }
+
+  const csrfToken = firstString(opts.csrf, process.env.HSCLI_HUBSPOT_CSRF, extractCsrfToken(cookie));
+  if (!csrfToken) {
+    throw new CliError(
+      "SESSION_CSRF_REQUIRED",
+      "Permission-set commands require --csrf or HSCLI_HUBSPOT_CSRF. A csrf.app cookie is also accepted when present.",
+    );
+  }
+
+  return {
+    portalId,
+    client: createBrowserSessionClient(ctx.profile, {
+      apiBaseUrl: `https://${uiDomain}`,
+      cookie,
+      csrfToken,
+      telemetryFile: ctx.telemetryFile,
+      strictCapabilities: ctx.strictCapabilities,
+    }),
+  };
+}
+
+function permissionSetsPath(portalId: string): string {
+  return `/api/app-users/v1/permission-sets?portalId=${encodeURIComponent(portalId)}`;
+}
+
+function permissionSetPath(portalId: string, id: string): string {
+  return `/api/app-users/v1/permission-sets/${encodePathSegment(id, "permissionSetId")}?portalId=${encodeURIComponent(portalId)}`;
+}
+
+async function maybeWritePermissionSetWithRoleRetry(
+  ctx: CliContext,
+  client: HubSpotClient,
+  method: "POST" | "PUT" | "PATCH",
+  path: string,
+  body: Record<string, unknown>,
+  stripUnknownRoles: boolean,
+): Promise<unknown> {
+  try {
+    return await maybeWrite(ctx, client, method, path, body);
+  } catch (error) {
+    const missingRoles = stripUnknownRoles ? extractMissingRoles(error) : [];
+    const strippedBody = missingRoles.length > 0 ? stripRoles(body, missingRoles) : undefined;
+    if (!strippedBody) throw error;
+
+    const result = await maybeWrite(ctx, client, method, path, strippedBody);
+    return {
+      result,
+      strippedRoleNames: missingRoles,
+    };
+  }
+}
+
+async function findExistingPermissionSetByName(
+  client: HubSpotClient,
+  portalId: string,
+  name: string,
+): Promise<Record<string, unknown> | undefined> {
+  const response = await client.request(permissionSetsPath(portalId));
+  return extractPermissionSets(response).find((item) => item.name === name);
+}
+
+function extractPermissionSets(response: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(response)) return response.filter(isRecord);
+  if (!isRecord(response)) return [];
+  for (const key of ["results", "permissionSets", "items"]) {
+    const value = response[key];
+    if (Array.isArray(value)) return value.filter(isRecord);
+  }
+  return [];
+}
+
+function extractMissingRoles(error: unknown): string[] {
+  if (!(error instanceof CliError) || error.status !== 400) return [];
+  const details = error.details === undefined ? error.message : JSON.stringify(error.details);
+  const match = details.match(/Cannot find roles\s*\[([^\]]+)\]/i);
+  if (!match) return [];
+  return match[1]
+    .split(",")
+    .map((role) => role.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
+function stripRoles(body: Record<string, unknown>, rolesToStrip: string[]): Record<string, unknown> | undefined {
+  const roles = Array.isArray(body.roleNames) ? body.roleNames.filter((role): role is string => typeof role === "string") : [];
+  if (roles.length === 0) return undefined;
+  const missing = new Set(rolesToStrip);
+  const kept = roles.filter((role) => !missing.has(role));
+  if (kept.length === roles.length) return undefined;
+  return { ...body, roleNames: kept };
+}
+
+function safeProfile(profile: string): ReturnType<typeof getProfile> | undefined {
+  try {
+    return getProfile(profile);
+  } catch {
+    return undefined;
+  }
+}
+
+function firstString(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return undefined;
+}
+
+function normalizeUiDomain(raw: string): string {
+  return raw.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+}
+
+function readCookieFile(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  const raw = readFileSync(path, "utf8").trim();
+  if (!raw) return undefined;
+  return normalizeCookieFile(raw);
+}
+
+function normalizeCookieFile(raw: string): string {
+  const parsed = parseCookieJson(raw);
+  if (parsed) return parsed;
+
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const netscapeCookies = lines
+    .filter((line) => !line.startsWith("#"))
+    .map((line) => line.split(/\t+/))
+    .filter((parts) => parts.length >= 7)
+    .map((parts) => `${parts[5]}=${parts.slice(6).join("\t")}`);
+  if (netscapeCookies.length > 0) return netscapeCookies.join("; ");
+
+  return lines.filter((line) => !line.startsWith("#")).join("; ");
+}
+
+function parseCookieJson(raw: string): string | undefined {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed === "string") return parsed;
+    if (isRecord(parsed) && typeof parsed.cookie === "string") return parsed.cookie;
+    const cookies = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed.cookies) ? parsed.cookies : undefined;
+    if (!cookies) return undefined;
+    const pairs = cookies
+      .filter(isRecord)
+      .map((cookie) => {
+        const name = typeof cookie.name === "string" ? cookie.name.trim() : "";
+        const value = typeof cookie.value === "string" ? cookie.value : "";
+        return name ? `${name}=${value}` : "";
+      })
+      .filter(Boolean);
+    return pairs.length > 0 ? pairs.join("; ") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractCsrfToken(cookieHeader: string): string | undefined {
+  const candidates = new Set(["csrf.app", "csrf", "hubspotapi-csrf", "hs-csrf"]);
+  for (const part of cookieHeader.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (!rawName || rawValue.length === 0) continue;
+    if (candidates.has(rawName.trim().toLowerCase())) {
+      const value = rawValue.join("=").trim();
+      return value ? decodeURIComponent(value) : undefined;
+    }
+  }
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
 
 export function registerSettings(program: Command, getCtx: () => CliContext): void {
   const settings = program.command("settings").description("HubSpot Settings APIs");
@@ -100,6 +316,83 @@ export function registerSettings(program: Command, getCtx: () => CliContext): vo
       const ctx = getCtx();
       const client = createClient(ctx.profile);
       const res = await client.request("/settings/v3/users/teams");
+      printResult(ctx, res);
+    });
+
+  // Permission sets — internal HubSpot endpoint, requires browser session cookies.
+  const permissionSets = settings.command("permission-sets").description("Permission-set management via internal HubSpot session-auth endpoint");
+
+  addBrowserSessionOptions(permissionSets.command("list"))
+    .action(async (opts) => {
+      const ctx = getCtx();
+      const { client, portalId } = resolvePermissionSetSession(ctx, opts);
+      const res = await client.request(permissionSetsPath(portalId));
+      printResult(ctx, res);
+    });
+
+  addBrowserSessionOptions(permissionSets.command("get").argument("<id>"))
+    .action(async (id, opts) => {
+      const ctx = getCtx();
+      const { client, portalId } = resolvePermissionSetSession(ctx, opts);
+      const res = await client.request(permissionSetPath(portalId, id));
+      printResult(ctx, res);
+    });
+
+  addBrowserSessionOptions(
+    permissionSets.command("create")
+      .requiredOption("--data <payload>", "Permission-set payload JSON: { name, description?, roleNames[] }")
+      .option("--skip-existing", "Fetch existing permission sets first and skip when name already exists")
+      .option("--no-strip-unknown-roles", "Do not auto-retry after removing roles rejected by HubSpot"),
+  ).action(async (opts) => {
+    const ctx = getCtx();
+    const { client, portalId } = resolvePermissionSetSession(ctx, opts);
+    const payload = parseJsonPayload(opts.data);
+    const path = permissionSetsPath(portalId);
+
+    if (!ctx.dryRun && opts.skipExisting) {
+      const name = typeof payload.name === "string" ? payload.name.trim() : "";
+      if (!name) throw new CliError("PERMISSION_SET_NAME_REQUIRED", "--skip-existing requires payload.name.");
+      const existing = await findExistingPermissionSetByName(client, portalId, name);
+      if (existing) {
+        printResult(ctx, { skipped: true, reason: "permission-set-exists", existing });
+        return;
+      }
+    }
+
+    const res = await maybeWritePermissionSetWithRoleRetry(ctx, client, "POST", path, payload, opts.stripUnknownRoles !== false);
+    printResult(ctx, res);
+  });
+
+  addBrowserSessionOptions(
+    permissionSets.command("update")
+      .argument("<id>")
+      .requiredOption("--data <payload>", "Permission-set update payload JSON")
+      .option("--method <method>", "HTTP method for update: PUT|PATCH", "PUT")
+      .option("--no-strip-unknown-roles", "Do not auto-retry after removing roles rejected by HubSpot"),
+  ).action(async (id, opts) => {
+    const ctx = getCtx();
+    const method = String(opts.method).trim().toUpperCase();
+    if (method !== "PUT" && method !== "PATCH") {
+      throw new CliError("INVALID_FLAG", "--method must be PUT or PATCH");
+    }
+    const { client, portalId } = resolvePermissionSetSession(ctx, opts);
+    const payload = parseJsonPayload(opts.data);
+    const res = await maybeWritePermissionSetWithRoleRetry(
+      ctx,
+      client,
+      method,
+      permissionSetPath(portalId, id),
+      payload,
+      opts.stripUnknownRoles !== false,
+    );
+    printResult(ctx, res);
+  });
+
+  addBrowserSessionOptions(permissionSets.command("delete").argument("<id>"))
+    .action(async (id, opts) => {
+      const ctx = getCtx();
+      const { client, portalId } = resolvePermissionSetSession(ctx, opts);
+      const res = await maybeWrite(ctx, client, "DELETE", permissionSetPath(portalId, id));
       printResult(ctx, res);
     });
 

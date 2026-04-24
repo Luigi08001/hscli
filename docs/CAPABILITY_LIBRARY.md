@@ -390,7 +390,7 @@ BRANCH example:
 
 - `hscli settings users list|create|update|delete` ✅
 - `hscli settings teams list|create|update|delete` ✅
-- Permission-set / role authoring ⚠️ — partial; role templates are UI-only.
+- `hscli settings permission-sets list|get|create|update|delete` ✅ — internal `/api/app-users/v1/permission-sets` endpoint; requires browser session cookie + `x-hubspot-csrf-hubspotapi`, not bearer-token auth.
 
 ### Business units
 

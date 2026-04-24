@@ -26,6 +26,11 @@ describe("hscli", () => {
     delete process.env.HSCLI_STRICT_CAPABILITIES;
     delete process.env.HSCLI_REQUEST_ID;
     delete process.env.HSCLI_TELEMETRY_FILE;
+    delete process.env.HSCLI_PORTAL_ID;
+    delete process.env.HSCLI_HUBSPOT_COOKIE;
+    delete process.env.HSCLI_HUBSPOT_COOKIE_FILE;
+    delete process.env.HSCLI_HUBSPOT_CSRF;
+    delete process.env.HSCLI_HUBSPOT_UI_DOMAIN;
   });
 
   it("parses global flags", async () => {
@@ -120,6 +125,170 @@ describe("hscli", () => {
     const [url] = fetchSpy.mock.calls[0];
     expect(String(url)).toContain("/marketing/v3/forms?");
     expect(String(url)).toContain("limit=2");
+  });
+
+  it("settings permission-sets list uses browser session auth against internal app endpoint", async () => {
+    const home = setupHomeWithToken("default", "test-token", {
+      portalId: "148339018",
+      uiDomain: "app.hubspot.com",
+    });
+    process.env.HOME = home;
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [{ id: "ps-1", name: "Regional Admin" }] }),
+      headers: new Headers(),
+    } as never);
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "settings",
+      "permission-sets",
+      "list",
+      "--cookie",
+      "hubspotutk=abc; csrf.app=csrf-from-cookie",
+    ]);
+
+    const [url, init] = fetchSpy.mock.calls[0] as [URL | string, RequestInit];
+    expect(String(url)).toBe("https://app.hubspot.com/api/app-users/v1/permission-sets?portalId=148339018");
+    expect(init.method).toBe("GET");
+    expect((init.headers as Record<string, string>).Cookie).toBe("hubspotutk=abc; csrf.app=csrf-from-cookie");
+    expect((init.headers as Record<string, string>)["x-hubspot-csrf-hubspotapi"]).toBe("csrf-from-cookie");
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+
+  it("settings permission-sets create dry-run previews the internal POST without cookies in output", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "--dry-run",
+      "settings",
+      "permission-sets",
+      "create",
+      "--portal-id",
+      "148339018",
+      "--cookie",
+      "hubspotutk=abc",
+      "--csrf",
+      "csrf-token",
+      "--data",
+      '{"name":"Regional Admin","roleNames":["contacts-base","crm_custom_object:2-201783793:all-viewer"]}',
+    ]);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data).toMatchObject({
+      dryRun: true,
+      method: "POST",
+      path: "/api/app-users/v1/permission-sets?portalId=148339018",
+      body: {
+        name: "Regional Admin",
+        roleNames: ["contacts-base", "crm_custom_object:2-201783793:all-viewer"],
+      },
+    });
+    expect(String(logSpy.mock.calls[0][0])).not.toContain("csrf-token");
+    expect(String(logSpy.mock.calls[0][0])).not.toContain("hubspotutk=abc");
+  });
+
+  it("settings permission-sets create can skip by existing name", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [{ id: "ps-1", name: "Regional Admin" }] }),
+      headers: new Headers(),
+    } as never);
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "--force",
+      "settings",
+      "permission-sets",
+      "create",
+      "--portal-id",
+      "148339018",
+      "--cookie",
+      "hubspotutk=abc",
+      "--csrf",
+      "csrf-token",
+      "--skip-existing",
+      "--data",
+      '{"name":"Regional Admin","roleNames":["contacts-base"]}',
+    ]);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data).toMatchObject({
+      skipped: true,
+      reason: "permission-set-exists",
+      existing: { id: "ps-1", name: "Regional Admin" },
+    });
+  });
+
+  it("settings permission-sets create retries once after stripping unknown roles", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ message: "Cannot find roles [missing-role]" }),
+        headers: new Headers(),
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: "ps-2", name: "Regional Admin" }),
+        headers: new Headers(),
+      } as never);
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "--force",
+      "settings",
+      "permission-sets",
+      "create",
+      "--portal-id",
+      "148339018",
+      "--cookie",
+      "hubspotutk=abc",
+      "--csrf",
+      "csrf-token",
+      "--data",
+      '{"name":"Regional Admin","roleNames":["contacts-base","missing-role"]}',
+    ]);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const [, retryInit] = fetchSpy.mock.calls[1] as [URL | string, RequestInit];
+    expect(JSON.parse(retryInit.body as string)).toMatchObject({
+      name: "Regional Admin",
+      roleNames: ["contacts-base"],
+    });
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data).toMatchObject({
+      result: { id: "ps-2", name: "Regional Admin" },
+      strippedRoleNames: ["missing-role"],
+    });
   });
 
   it("translates legacy forms/v2 payloads before creating marketing v3 forms", async () => {

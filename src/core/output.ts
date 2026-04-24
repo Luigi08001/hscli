@@ -28,7 +28,7 @@ export class CliError extends Error {
   }
 }
 
-const SENSITIVE_KEYWORDS = ["token", "authorization", "api_key", "apikey", "secret", "password", "privateapp"];
+const SENSITIVE_KEYWORDS = ["token", "authorization", "api_key", "apikey", "secret", "password", "privateapp", "cookie", "csrf"];
 const BEARER_PATTERN = /bearer\s+[a-z0-9._~+/\-=]+/gi;
 const HUBSPOT_PRIVATE_APP_TOKEN_PATTERN = /\bpat-[a-z0-9-]{10,}\b/gi;
 const SECRET_ASSIGNMENT_PATTERNS = [
