@@ -34,6 +34,9 @@ hscli auth profile-show --profile production
 
 ```bash
 hscli auth token-info --profile production
+hscli doctor scopes list --filter "crm.objects"
+hscli --profile production doctor scopes diff --required real-mirror-read
+hscli doctor scopes explain sales-email-read
 ```
 
 ### Lock a profile to read-only

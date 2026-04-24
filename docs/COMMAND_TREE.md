@@ -31,7 +31,7 @@ High-level map of every hscli command. For detailed args and examples per comman
 ## Doctor
 
 - `hscli doctor capabilities [--refresh]` — probe portal tier + scopes
-- `hscli doctor permissions` — introspect current token scopes
+- `hscli doctor scopes list|presets|explain|diff` — local HubSpot scope catalog and preset diffing
 
 ## Guide
 

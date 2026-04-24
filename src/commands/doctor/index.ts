@@ -4,8 +4,17 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { getToken, getProfile, detectHublet, resolveApiDomain } from "../../core/auth.js";
 import { probeCapabilities } from "../../core/capabilities.js";
+import { createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
-import { printResult } from "../../core/output.js";
+import { CliError, printResult } from "../../core/output.js";
+import {
+  HUBSPOT_SCOPE_CATALOG,
+  diffScopes,
+  getScopeDefinition,
+  listScopePresetNames,
+  parseScopeList,
+  resolveScopeSet,
+} from "../../core/scopes.js";
 import { parseNumberFlag } from "../crm/shared.js";
 
 interface HsCliAccount {
@@ -87,6 +96,39 @@ function assignAccountField(account: HsCliAccount, key: string, value: string): 
   if (key === "authType") account.authType = clean;
 }
 
+async function resolveGrantedScopes(profile: string, rawScopes?: string): Promise<{ scopes: string[]; source: "flag" | "profile" | "token-info" }> {
+  const fromFlag = parseScopeList(rawScopes);
+  if (fromFlag.length > 0) return { scopes: fromFlag, source: "flag" };
+
+  try {
+    const profileScopes = parseScopeList(getProfile(profile).scopes ?? []);
+    if (profileScopes.length > 0) return { scopes: profileScopes, source: "profile" };
+  } catch {
+    // Fall through to token-info so the error message can be more useful.
+  }
+
+  const token = getToken(profile);
+  const client = createClient(profile);
+  const tokenInfo = await client.request(`/oauth/v1/access-tokens/${encodeURIComponent(token)}`);
+  const scopes = extractTokenInfoScopes(tokenInfo);
+  if (scopes.length === 0) {
+    throw new CliError("TOKEN_SCOPES_UNAVAILABLE", "Token metadata did not include scopes. Pass --granted-scopes explicitly.");
+  }
+  return { scopes, source: "token-info" };
+}
+
+function extractTokenInfoScopes(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const record = value as Record<string, unknown>;
+  return parseScopeList(
+    Array.isArray(record.scopes)
+      ? record.scopes.filter((item): item is string => typeof item === "string")
+      : typeof record.scope === "string"
+        ? record.scope
+        : undefined,
+  );
+}
+
 export function registerDoctor(program: Command, getCtx: () => CliContext): void {
   const doctor = program.command("doctor").description("Diagnostics and capability checks");
 
@@ -107,6 +149,96 @@ export function registerDoctor(program: Command, getCtx: () => CliContext): void
         ttlMs: ttlHours * 3_600_000,
       });
       printResult(ctx, result);
+    });
+
+  const scopes = doctor.command("scopes").description("Inspect HubSpot OAuth/private-app scope catalog and compare required presets");
+
+  scopes
+    .command("list")
+    .description("List known HubSpot scopes")
+    .option("--filter <text>", "Filter by substring")
+    .option("--category <name>", "Filter by inferred category, e.g. crm.objects, settings, cms")
+    .option("--access <mode>", "Filter by access: read|write|read_write|other")
+    .option("--preset <name>", "Show scopes in a preset instead of the whole catalog")
+    .action((opts) => {
+      const ctx = getCtx();
+      const preset = opts.preset ? resolveScopeSet(String(opts.preset)) : undefined;
+      const allowed = preset ? new Set(preset.scopes) : undefined;
+      const filter = typeof opts.filter === "string" ? opts.filter.trim().toLowerCase() : "";
+      const category = typeof opts.category === "string" ? opts.category.trim().toLowerCase() : "";
+      const access = typeof opts.access === "string" ? opts.access.trim().toLowerCase() : "";
+      const rows = HUBSPOT_SCOPE_CATALOG
+        .filter((definition) => !allowed || allowed.has(definition.scope))
+        .filter((definition) => !filter || definition.scope.toLowerCase().includes(filter))
+        .filter((definition) => !category || definition.category.toLowerCase() === category)
+        .filter((definition) => !access || definition.access === access)
+        .map((definition) => ({
+          scope: definition.scope,
+          category: definition.category,
+          access: definition.access,
+          sensitivity: definition.sensitivity,
+          deprecated: definition.deprecated,
+          notes: definition.notes,
+        }));
+      printResult(ctx, {
+        preset: preset?.name ?? null,
+        count: rows.length,
+        scopes: rows,
+      });
+    });
+
+  scopes
+    .command("presets")
+    .description("List built-in scope presets")
+    .action(() => {
+      const ctx = getCtx();
+      printResult(ctx, {
+        presets: listScopePresetNames().map((name) => {
+          const preset = resolveScopeSet(name);
+          return { name, count: preset.scopes.length, scopes: preset.scopes };
+        }),
+      });
+    });
+
+  scopes
+    .command("explain")
+    .argument("<scope>", "Scope name")
+    .description("Explain one scope from the local catalog")
+    .action((scope) => {
+      const ctx = getCtx();
+      const definition = getScopeDefinition(scope);
+      if (!definition) {
+        printResult(ctx, {
+          scope,
+          known: false,
+          message: "Scope is not in hscli's local catalog. Check HubSpot's current private-app scope UI.",
+        });
+        return;
+      }
+      printResult(ctx, { known: true, ...definition });
+    });
+
+  scopes
+    .command("diff")
+    .description("Compare granted scopes with a built-in preset or CSV scope list")
+    .option("--required <presetOrCsv>", "Preset name or comma/space-separated scope list", "real-mirror-read")
+    .option("--granted-scopes <csv>", "Granted scopes CSV/space list; defaults to profile scopes or token-info")
+    .action(async (opts) => {
+      const ctx = getCtx();
+      const required = resolveScopeSet(String(opts.required ?? "real-mirror-read"));
+      const granted = await resolveGrantedScopes(ctx.profile, opts.grantedScopes ? String(opts.grantedScopes) : undefined);
+      const diff = diffScopes(required.scopes, granted.scopes);
+      printResult(ctx, {
+        profile: ctx.profile,
+        required: { name: required.name, count: diff.required.length },
+        granted: { source: granted.source, count: diff.granted.length },
+        ok: diff.missing.length === 0,
+        presentCount: diff.present.length,
+        missingCount: diff.missing.length,
+        missing: diff.missing,
+        unknownGranted: diff.unknownGranted,
+        extraKnown: diff.extraKnown,
+      });
     });
 
   doctor

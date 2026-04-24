@@ -641,6 +641,57 @@ describe("hscli", () => {
     expect(output.data.summary.supported).toBeGreaterThan(0);
   });
 
+  it("doctor scopes lists the local HubSpot scope catalog", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const { run } = await import("../src/cli.js");
+    await run(["node", "hscli", "--json", "doctor", "scopes", "list", "--filter", "settings.users.teams"]);
+
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data.count).toBeGreaterThanOrEqual(2);
+    expect(output.data.scopes.map((row: { scope: string }) => row.scope)).toContain("settings.users.teams.read");
+    expect(output.data.scopes.map((row: { scope: string }) => row.scope)).toContain("settings.users.teams.write");
+  });
+
+  it("doctor scopes explain returns metadata for one scope", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const { run } = await import("../src/cli.js");
+    await run(["node", "hscli", "--json", "doctor", "scopes", "explain", "sales-email-read"]);
+
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data).toMatchObject({
+      known: true,
+      scope: "sales-email-read",
+      category: "platform",
+      notes: "Required to read one-to-one sales email engagement content.",
+    });
+  });
+
+  it("doctor scopes diff compares profile scopes against a preset without fetching token-info", async () => {
+    const home = setupHomeWithToken("default", "test-token", {
+      scopes: ["crm.objects.contacts.read", "crm.objects.companies.read"],
+    });
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+
+    const { run } = await import("../src/cli.js");
+    await run(["node", "hscli", "--json", "doctor", "scopes", "diff", "--required", "real-mirror-read"]);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data.ok).toBe(false);
+    expect(output.data.granted.source).toBe("profile");
+    expect(output.data.missing).toContain("automation");
+    expect(output.data.missing).toContain("crm.objects.tasks.read");
+    expect(output.data.missing).toContain("sales-email-read");
+  });
+
   it("maps 403 endpoint responses to endpoint availability guidance", async () => {
     const home = setupHomeWithToken("default", "test-token", {
       portalId: "12345",
