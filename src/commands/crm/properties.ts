@@ -3,7 +3,7 @@ import { createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { CliError, printResult } from "../../core/output.js";
 import { chunkInputs, loadExistingPropertyMetadata, normalizePropertyBatch, normalizePropertyLabel, propertyName, readPropertyInputs, type EmptyEnumMode } from "./property-batch.js";
-import { PROPERTY_OBJECT_TYPES, encodePathSegment, maybeWrite, parseJsonPayload, parseNumberFlag, parseSupportedObjectType } from "./shared.js";
+import { encodePathSegment, maybeWrite, parseJsonPayload, parseNumberFlag } from "./shared.js";
 
 function parseEmptyEnumMode(raw: string | undefined): EmptyEnumMode {
   if (raw === undefined || raw === "skip") return "skip";
@@ -17,8 +17,7 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
   properties.command("list").argument("<objectType>").action(async (objectType) => {
     const ctx = getCtx();
     const client = createClient(ctx.profile);
-    const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(objectType, "objectType");
     const res = await client.request(`/crm/v3/properties/${objectTypeSegment}`);
     printResult(ctx, res);
   });
@@ -26,8 +25,7 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
   properties.command("get").argument("<objectType>").argument("<propertyName>").action(async (objectType, propertyName) => {
     const ctx = getCtx();
     const client = createClient(ctx.profile);
-    const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(objectType, "objectType");
     const propertyNameSegment = encodePathSegment(propertyName, "propertyName");
     const res = await client.request(`/crm/v3/properties/${objectTypeSegment}/${propertyNameSegment}`);
     printResult(ctx, res);
@@ -36,8 +34,7 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
   properties.command("create").argument("<objectType>").requiredOption("--data <payload>", "Property payload JSON").action(async (objectType, opts) => {
     const ctx = getCtx();
     const client = createClient(ctx.profile);
-    const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(objectType, "objectType");
     const payload = parseJsonPayload(opts.data);
     const res = await maybeWrite(ctx, client, "POST", `/crm/v3/properties/${objectTypeSegment}`, payload);
     printResult(ctx, res);
@@ -136,8 +133,7 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
     .action(async (objectType, propertyName, opts) => {
       const ctx = getCtx();
       const client = createClient(ctx.profile);
-      const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-      const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+      const objectTypeSegment = encodePathSegment(objectType, "objectType");
       const propertyNameSegment = encodePathSegment(propertyName, "propertyName");
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "PATCH", `/crm/v3/properties/${objectTypeSegment}/${propertyNameSegment}`, payload);
@@ -147,8 +143,7 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
   properties.command("delete").argument("<objectType>").argument("<propertyName>").action(async (objectType, propertyName) => {
     const ctx = getCtx();
     const client = createClient(ctx.profile);
-    const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(objectType, "objectType");
     const propertyNameSegment = encodePathSegment(propertyName, "propertyName");
     const res = await maybeWrite(ctx, client, "DELETE", `/crm/v3/properties/${objectTypeSegment}/${propertyNameSegment}`);
     printResult(ctx, res);
@@ -164,8 +159,7 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
     .action(async (objectType, opts) => {
       const ctx = getCtx();
       const client = createClient(ctx.profile);
-      const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-      const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+      const objectTypeSegment = encodePathSegment(objectType, "objectType");
       const params = new URLSearchParams();
       params.set("limit", String(parseNumberFlag(opts.limit, "--limit")));
       if (opts.after) params.set("after", opts.after);
@@ -180,8 +174,7 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
     .action(async (objectType, opts) => {
       const ctx = getCtx();
       const client = createClient(ctx.profile);
-      const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-      const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+      const objectTypeSegment = encodePathSegment(objectType, "objectType");
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "POST", `/crm/v3/properties/${objectTypeSegment}/groups`, payload);
       printResult(ctx, res);
@@ -195,11 +188,19 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
     .action(async (objectType, groupName, opts) => {
       const ctx = getCtx();
       const client = createClient(ctx.profile);
-      const objectTypeValue = parseSupportedObjectType(objectType, PROPERTY_OBJECT_TYPES, "objectType");
-      const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+      const objectTypeSegment = encodePathSegment(objectType, "objectType");
       const groupNameSegment = encodePathSegment(groupName, "groupName");
       const payload = parseJsonPayload(opts.data);
       const res = await maybeWrite(ctx, client, "PATCH", `/crm/v3/properties/${objectTypeSegment}/groups/${groupNameSegment}`, payload);
       printResult(ctx, res);
     });
+
+  groups.command("delete").argument("<objectType>").argument("<groupName>").action(async (objectType, groupName) => {
+    const ctx = getCtx();
+    const client = createClient(ctx.profile);
+    const objectTypeSegment = encodePathSegment(objectType, "objectType");
+    const groupNameSegment = encodePathSegment(groupName, "groupName");
+    const res = await maybeWrite(ctx, client, "DELETE", `/crm/v3/properties/${objectTypeSegment}/groups/${groupNameSegment}`);
+    printResult(ctx, res);
+  });
 }

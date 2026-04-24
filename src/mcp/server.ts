@@ -8,7 +8,6 @@ import {
   ENGAGEMENT_OBJECT_TYPES,
   OBJECT_COMMAND_TYPES,
   PIPELINE_OBJECT_TYPES,
-  PROPERTY_OBJECT_TYPES,
   appendOptional,
   encodePathSegment,
   maybeWrite,
@@ -311,29 +310,26 @@ export function registerHubSpotTools(server: McpServer): void {
 
   registerMcpTool(server,"crm_properties_list", {
     description: "List properties for an object type",
-    inputSchema: { ...baseArgsSchema, objectType: z.enum(PROPERTY_OBJECT_TYPES) },
+    inputSchema: { ...baseArgsSchema, objectType: z.string().min(1).describe("Standard object type or custom object type ID (e.g. 2-123456)") },
   }, (args) => executeTool(args, (_ctx, client) => {
-    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
     return client.request(`/crm/v3/properties/${objectTypeSegment}`);
   }));
 
   registerMcpTool(server,"crm_properties_get", {
     description: "Get one property definition",
-    inputSchema: { ...baseArgsSchema, objectType: z.enum(PROPERTY_OBJECT_TYPES), propertyName: z.string().min(1) },
+    inputSchema: { ...baseArgsSchema, objectType: z.string().min(1).describe("Standard object type or custom object type ID (e.g. 2-123456)"), propertyName: z.string().min(1) },
   }, (args) => executeTool(args, (_ctx, client) => {
-    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
     const propertyNameSegment = encodePathSegment(args.propertyName, "propertyName");
     return client.request(`/crm/v3/properties/${objectTypeSegment}/${propertyNameSegment}`);
   }));
 
   registerMcpTool(server,"crm_properties_create", {
     description: "Create property (dry-run by default unless force=true)",
-    inputSchema: { ...baseArgsSchema, objectType: z.enum(PROPERTY_OBJECT_TYPES), data: z.record(z.string(), z.unknown()) },
+    inputSchema: { ...baseArgsSchema, objectType: z.string().min(1).describe("Standard object type or custom object type ID (e.g. 2-123456)"), data: z.record(z.string(), z.unknown()) },
   }, (args) => executeTool(args, (ctx, client) => {
-    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
     return maybeWrite(ctx, client, "POST", `/crm/v3/properties/${objectTypeSegment}`, args.data);
   }));
 
@@ -427,13 +423,12 @@ export function registerHubSpotTools(server: McpServer): void {
     description: "Update property (dry-run by default unless force=true)",
     inputSchema: {
       ...baseArgsSchema,
-      objectType: z.enum(PROPERTY_OBJECT_TYPES),
+      objectType: z.string().min(1).describe("Standard object type or custom object type ID (e.g. 2-123456)"),
       propertyName: z.string().min(1),
       data: z.record(z.string(), z.unknown()),
     },
   }, (args) => executeTool(args, (ctx, client) => {
-    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
     const propertyNameSegment = encodePathSegment(args.propertyName, "propertyName");
     return maybeWrite(ctx, client, "PATCH", `/crm/v3/properties/${objectTypeSegment}/${propertyNameSegment}`, args.data);
   }));
@@ -892,11 +887,10 @@ export function registerHubSpotTools(server: McpServer): void {
     description: "List property groups for an object type",
     inputSchema: {
       ...baseArgsSchema,
-      objectType: z.enum(PROPERTY_OBJECT_TYPES),
+      objectType: z.string().min(1).describe("Standard object type or custom object type ID (e.g. 2-123456)"),
     },
   }, (args) => executeTool(args, (_ctx, client) => {
-    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
     return client.request(`/crm/v3/properties/${objectTypeSegment}/groups`);
   }));
 
@@ -904,12 +898,11 @@ export function registerHubSpotTools(server: McpServer): void {
     description: "Create a property group (dry-run by default unless force=true)",
     inputSchema: {
       ...baseArgsSchema,
-      objectType: z.enum(PROPERTY_OBJECT_TYPES),
+      objectType: z.string().min(1).describe("Standard object type or custom object type ID (e.g. 2-123456)"),
       data: z.record(z.string(), z.unknown()),
     },
   }, (args) => executeTool(args, (ctx, client) => {
-    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
     return maybeWrite(ctx, client, "POST", `/crm/v3/properties/${objectTypeSegment}/groups`, args.data);
   }));
 
@@ -917,13 +910,12 @@ export function registerHubSpotTools(server: McpServer): void {
     description: "Update a property group (dry-run by default unless force=true)",
     inputSchema: {
       ...baseArgsSchema,
-      objectType: z.enum(PROPERTY_OBJECT_TYPES),
+      objectType: z.string().min(1).describe("Standard object type or custom object type ID (e.g. 2-123456)"),
       groupName: z.string().min(1),
       data: z.record(z.string(), z.unknown()),
     },
   }, (args) => executeTool(args, (ctx, client) => {
-    const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
-    const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
     const groupNameSegment = encodePathSegment(args.groupName, "groupName");
     return maybeWrite(ctx, client, "PATCH", `/crm/v3/properties/${objectTypeSegment}/groups/${groupNameSegment}`, args.data);
   }));

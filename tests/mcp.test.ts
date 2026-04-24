@@ -349,6 +349,44 @@ describe("mcp server", () => {
     expect(result.structuredContent).toMatchObject({ dryRun: true });
   });
 
+  it("properties create accepts custom object IDs in dry-run mode", async () => {
+    setupHomeWithToken();
+    const mock = new MockMcpServer();
+    registerHubSpotTools(mock as any);
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+
+    const result = await mock.tools.get("crm_properties_create")!({
+      objectType: "2-123456",
+      data: { name: "migration_prop", label: "Migration Prop", type: "string", fieldType: "text", groupName: "customobjectinformation" },
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({
+      dryRun: true,
+      method: "POST",
+      path: "/crm/v3/properties/2-123456",
+    });
+  });
+
+  it("property groups create accepts custom object IDs in dry-run mode", async () => {
+    setupHomeWithToken();
+    const mock = new MockMcpServer();
+    registerHubSpotTools(mock as any);
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+
+    const result = await mock.tools.get("crm_property_groups_create")!({
+      objectType: "2-123456",
+      data: { name: "migration_group", label: "Migration Group", displayOrder: 10 },
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({
+      dryRun: true,
+      method: "POST",
+      path: "/crm/v3/properties/2-123456/groups",
+    });
+  });
+
   it("properties batch create supports custom object IDs in dry-run mode", async () => {
     setupHomeWithToken();
     const mock = new MockMcpServer();
@@ -426,7 +464,7 @@ describe("mcp server", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(result.isError).toBe(true);
-    expect(result.structuredContent).toMatchObject({ code: "UNSUPPORTED_OBJECT_TYPE" });
+    expect(result.structuredContent).toMatchObject({ code: "INVALID_PATH_SEGMENT" });
   });
 
   it("rejects invalid id segments", async () => {

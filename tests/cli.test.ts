@@ -251,7 +251,7 @@ describe("hscli", () => {
     expect(output).toContain("/crm/v3/objects/contacts");
   });
 
-  it("rejects unsupported objectType outside strict allowlist", async () => {
+  it("rejects traversal-like property objectType segments", async () => {
     const home = setupHomeWithToken();
     process.env.HOME = home;
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -271,7 +271,48 @@ describe("hscli", () => {
     ]);
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(errSpy.mock.calls.some((c) => String(c[0]).includes("UNSUPPORTED_OBJECT_TYPE"))).toBe(true);
+    expect(errSpy.mock.calls.some((c) => String(c[0]).includes("INVALID_PATH_SEGMENT"))).toBe(true);
+  });
+
+  it("supports custom object type IDs for property reads and group writes", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ results: [] }),
+      headers: new Headers(),
+    } as never);
+
+    const { run } = await import("../src/cli.js");
+    await run(["node", "hscli", "--json", "crm", "properties", "list", "2-123456"]);
+
+    expect(String(fetchSpy.mock.calls[0][0])).toContain("/crm/v3/properties/2-123456");
+
+    fetchSpy.mockClear();
+    logSpy.mockClear();
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "--dry-run",
+      "crm",
+      "properties",
+      "groups",
+      "create",
+      "2-123456",
+      "--data",
+      '{"name":"migration_group","label":"Migration Group","displayOrder":10}',
+    ]);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data).toMatchObject({
+      dryRun: true,
+      method: "POST",
+      path: "/crm/v3/properties/2-123456/groups",
+    });
   });
 
   it("batch-creates properties from list dumps for custom objects in dry-run mode", async () => {
