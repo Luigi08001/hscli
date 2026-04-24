@@ -153,7 +153,7 @@ Imports + sync + introspection:
 ## Files + Forms + Domains + Site-search + Timeline
 
 - `hscli files list|get|upload|delete`
-- `hscli forms list|get|submissions list|create`
+- `hscli forms list|get|create|update|translate-v2|submissions list`
 - `hscli domains list|get`
 - `hscli site-search list --type <type>`
 - `hscli timeline events list|create`

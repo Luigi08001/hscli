@@ -210,7 +210,7 @@ hscli forms get <formId>
 # Create a form
 hscli forms create --data '{
   "name": "Contact Us",
-  "formType": "HUBSPOT",
+  "formType": "hubspot",
   "configuration": {
     "language": "en",
     "postSubmitAction": {"type": "thank_you", "value": "Thanks for reaching out!"}
@@ -221,9 +221,12 @@ hscli forms create --data '{
     {"fields": [{"name": "message", "fieldType": "textarea"}]}
   ]
 }' --force
+
+# Replay a legacy /forms/v2/forms export into the current /marketing/v3/forms API
+hscli forms create --source-format v2 --data '{"name":"Legacy form","submitText":"Submit","formFieldGroups":[{"fields":[{"name":"email","label":"Email","fieldType":"email","required":true}]}]}' --dry-run
 ```
 
-> **API:** `forms` scope. Full CRUD on forms including field configuration.
+> **API:** `forms` scope. Full CRUD on forms including field configuration. Legacy forms/v2 payloads are auto-translated on create/update when detected; use `hscli forms translate-v2` to inspect the v3 payload before replay.
 
 ---
 

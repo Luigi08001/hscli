@@ -122,7 +122,8 @@ All readable + writable via standard CRM endpoints:
 
 ### Forms
 
-- `hscli forms create|get|list|update` ✅
+- `hscli forms create|get|list|update|translate-v2` ✅
+- Legacy `/forms/v2/forms` exports can be translated to `/marketing/v3/forms` payloads during create/update ✅
 - `hscli submissions list <formGuid>` ✅
 - `hscli submissions search <portalId> <formGuid>` ✅
 - Embed codes: generated client-side from form id ✅

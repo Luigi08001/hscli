@@ -487,6 +487,11 @@ hscli forms get "f47ac10b-58cc-4372-a567-0e02b2c3d479"
 hscli forms create --dry-run \
   --data '{"name":"Q2 Webinar Signup","formType":"hubspot","configuration":{"language":"en"}}'
 
+hscli forms create --dry-run --source-format v2 \
+  --data '{"name":"Legacy Webinar Signup","submitText":"Register","formFieldGroups":[{"fields":[{"name":"email","label":"Email","fieldType":"email","required":true}]}]}'
+
+hscli forms translate-v2 --data '{"name":"Legacy Webinar Signup","submitText":"Register","formFieldGroups":[{"fields":[{"name":"email","label":"Email","fieldType":"email","required":true}]}]}'
+
 hscli forms update "f47ac10b-58cc-4372-a567-0e02b2c3d479" --force \
   --data '{"name":"Q2 Webinar Signup (Updated)"}'
 ```

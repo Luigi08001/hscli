@@ -61,7 +61,7 @@ describe("extension MCP tools (beyond HubSpot Remote MCP)", () => {
       // Files
       "files_list", "files_get", "files_delete", "files_signed_url",
       // Forms
-      "forms_list", "forms_get", "forms_submissions", "forms_submit",
+      "forms_list", "forms_get", "forms_create", "forms_update", "forms_submissions", "forms_submit",
       // Webhooks
       "webhooks_list_subscriptions", "webhooks_create_subscription", "webhooks_delete_subscription",
       // Marketing emails
@@ -160,6 +160,66 @@ describe("extension MCP tools (beyond HubSpot Remote MCP)", () => {
     await mock.tools.get("forms_submissions")!({ formId: "f1", limit: 25 });
     const url = String(fetchSpy.mock.calls[0][0]);
     expect(url).toContain("/form-integrations/v1/submissions/forms/f1");
+  });
+
+  it("forms_create translates legacy v2 payloads in dry-run mode", async () => {
+    setupAuthHome();
+    const mock = new MockMcpServer();
+
+    registerHubSpotTools(mock as any);
+    const fetchSpy = mockFetchOk({});
+    const res = await mock.tools.get("forms_create")!({
+      data: {
+        name: "Legacy MCP form",
+        submitText: "Go",
+        formFieldGroups: [{
+          fields: [{
+            name: "firstname",
+            label: "First name",
+            fieldType: "text",
+          }],
+        }],
+      },
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const body = JSON.parse(res.content[0].text);
+    expect(body).toMatchObject({
+      dryRun: true,
+      method: "POST",
+      path: "/marketing/v3/forms",
+    });
+    expect(body.body).toMatchObject({
+      formType: "hubspot",
+      name: "Legacy MCP form",
+      displayOptions: { submitButtonText: "Go" },
+    });
+    expect(body.body.fieldGroups[0].fields[0]).toMatchObject({
+      name: "firstname",
+      fieldType: "single_line_text",
+    });
+  });
+
+  it("forms_update keeps v3 payloads raw when requested", async () => {
+    setupAuthHome();
+    const mock = new MockMcpServer();
+
+    registerHubSpotTools(mock as any);
+    const fetchSpy = mockFetchOk({});
+    const res = await mock.tools.get("forms_update")!({
+      formId: "form-1",
+      sourceFormat: "v3",
+      data: { name: "Already v3", fieldGroups: [] },
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const body = JSON.parse(res.content[0].text);
+    expect(body).toMatchObject({
+      dryRun: true,
+      method: "PATCH",
+      path: "/marketing/v3/forms/form-1",
+      body: { name: "Already v3", fieldGroups: [] },
+    });
   });
 
   it("forms_submit with force hits /submissions/v3/integration/submit/{portalId}/{formGuid}", async () => {

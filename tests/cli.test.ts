@@ -122,6 +122,125 @@ describe("hscli", () => {
     expect(String(url)).toContain("limit=2");
   });
 
+  it("translates legacy forms/v2 payloads before creating marketing v3 forms", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+    const legacyForm = {
+      guid: "legacy-1",
+      name: "Legacy Newsletter",
+      submitText: "Send",
+      redirect: "https://example.com/thanks",
+      notifyRecipients: "ops@example.com, sales@example.com",
+      formFieldGroups: [{
+        fields: [
+          {
+            name: "email",
+            label: "Email",
+            fieldType: "email",
+            required: true,
+            validation: { blockedEmailAddresses: ["spam@example.com"], useDefaultBlockList: true },
+          },
+          {
+            name: "lead_source",
+            label: "Lead source",
+            fieldType: "select",
+            options: [
+              { label: "Website", value: "website" },
+              { label: "Referral", value: "referral" },
+            ],
+          },
+          {
+            name: "comments",
+            label: "Comments",
+            fieldType: "textarea",
+            enabled: false,
+          },
+        ],
+      }],
+    };
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "--dry-run",
+      "forms",
+      "create",
+      "--data",
+      JSON.stringify(legacyForm),
+    ]);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data).toMatchObject({
+      dryRun: true,
+      method: "POST",
+      path: "/marketing/v3/forms",
+    });
+    expect(output.data.body).toMatchObject({
+      formType: "hubspot",
+      name: "Legacy Newsletter",
+      configuration: {
+        postSubmitAction: { type: "redirect_url", value: "https://example.com/thanks" },
+        notifyRecipients: ["ops@example.com", "sales@example.com"],
+      },
+      displayOptions: { submitButtonText: "Send" },
+      legalConsentOptions: { type: "none" },
+    });
+    expect(output.data.body.fieldGroups[0].fields).toHaveLength(2);
+    expect(output.data.body.fieldGroups[0].fields[0]).toMatchObject({
+      name: "email",
+      fieldType: "email",
+      objectTypeId: "0-1",
+      validation: { blockedEmailDomains: ["example.com"], useDefaultBlockList: true },
+    });
+    expect(output.data.body.fieldGroups[0].fields[1]).toMatchObject({
+      name: "lead_source",
+      fieldType: "dropdown",
+      options: [
+        { label: "Website", value: "website", displayOrder: 0 },
+        { label: "Referral", value: "referral", displayOrder: 1 },
+      ],
+    });
+  });
+
+  it("can print a forms/v2 to marketing/v3 translated payload without writing", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "forms",
+      "translate-v2",
+      "--data",
+      JSON.stringify({
+        name: "Minimal legacy form",
+        inlineMessage: "Merci",
+        formFieldGroups: [{ fields: [{ name: "firstname", label: "First name", fieldType: "text" }] }],
+      }),
+    ]);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data).toMatchObject({
+      formType: "hubspot",
+      name: "Minimal legacy form",
+      configuration: { postSubmitAction: { type: "thank_you", value: "Merci" } },
+    });
+    expect(output.data.fieldGroups[0].fields[0]).toMatchObject({
+      name: "firstname",
+      fieldType: "single_line_text",
+    });
+  });
+
   it("strict capabilities mode fails fast when capability status is unknown", async () => {
     const home = setupHomeWithToken();
     process.env.HOME = home;

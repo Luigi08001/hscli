@@ -9,7 +9,7 @@
  *   ── Files ──
  *   - files_list, files_get, files_delete, files_signed_url
  *   ── Forms ──
- *   - forms_list, forms_get, forms_submissions, forms_submit
+ *   - forms_list, forms_get, forms_create, forms_update, forms_submissions, forms_submit
  *   ── Webhooks ──
  *   - webhooks_list_subscriptions, webhooks_create_subscription, webhooks_delete_subscription
  *   ── Marketing emails ──
@@ -24,6 +24,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { appendOptional, encodePathSegment, maybeWrite, parseNumberFlag } from "../commands/crm/shared.js";
+import { normalizeFormPayloadForV3 } from "../commands/forms/legacy-v2.js";
 import { baseArgsSchema, executeTool, registerMcpTool } from "./server.js";
 
 export function registerExtensionTools(server: McpServer): void {
@@ -147,6 +148,41 @@ export function registerExtensionTools(server: McpServer): void {
   }, (args: { formId: string; profile?: string }) => executeTool(args, (_ctx, client) =>
     client.request(`/marketing/v3/forms/${encodePathSegment(args.formId, "formId")}`),
   ));
+
+  registerMcpTool(server, "forms_create", {
+    description: "Create a marketing form. Legacy forms/v2 payloads are translated to v3 automatically. Dry-run by default unless force=true.",
+    inputSchema: {
+      ...baseArgsSchema,
+      data: z.record(z.string(), z.unknown()),
+      sourceFormat: z.enum(["auto", "v2", "v3"]).default("auto").optional(),
+    },
+  }, (args: { data: Record<string, unknown>; sourceFormat?: "auto" | "v2" | "v3"; force?: boolean; profile?: string }) =>
+    executeTool(args, (ctx, client) => maybeWrite(
+      ctx,
+      client,
+      "POST",
+      "/marketing/v3/forms",
+      normalizeFormPayloadForV3(args.data, args.sourceFormat ?? "auto"),
+    )),
+  );
+
+  registerMcpTool(server, "forms_update", {
+    description: "Update a marketing form. Legacy forms/v2 payloads are translated to v3 automatically. Dry-run by default unless force=true.",
+    inputSchema: {
+      ...baseArgsSchema,
+      formId: z.string().min(1),
+      data: z.record(z.string(), z.unknown()),
+      sourceFormat: z.enum(["auto", "v2", "v3"]).default("auto").optional(),
+    },
+  }, (args: { formId: string; data: Record<string, unknown>; sourceFormat?: "auto" | "v2" | "v3"; force?: boolean; profile?: string }) =>
+    executeTool(args, (ctx, client) => maybeWrite(
+      ctx,
+      client,
+      "PATCH",
+      `/marketing/v3/forms/${encodePathSegment(args.formId, "formId")}`,
+      normalizeFormPayloadForV3(args.data, args.sourceFormat ?? "auto"),
+    )),
+  );
 
   registerMcpTool(server, "forms_submissions", {
     description: "List submissions for a form. Not available via HubSpot Remote MCP.",
