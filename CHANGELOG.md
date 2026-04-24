@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.12 - 2026-04-24
+
+**Terminal operator home + `/fetch` alias.** Two incremental adds on
+top of 0.8.11's operator surface.
+
+### Added — terminal operator home
+
+- `hscli ui` / `hscli home` — opens a terminal home screen showing
+  the current profile's role, read/write safety state, policy + trace
+  status, API-usage guidance, and a recommended next command. Works
+  as a landing surface for "what should I do next on this portal?".
+
+### Added — `/fetch` (`/get`) slash command
+
+- Added to the Claude-style operator set (now `/setup`, `/migration`,
+  `/read`, `/fetch` / `/get`, `/write`, `/guardrails`). Thin alias
+  over read-shaped commands so agents can pick up HubSpot records
+  with the same grammar they use to read vault state.
+
+One new test (308 total passing).
+
 ## 0.8.11 - 2026-04-24
 
 **Migration operator surface + shared rate-limit enforcement.** Ships
@@ -10,17 +31,13 @@ translator, session-auth permission sets), and tightens the HTTP
 layer so multiple clients in one process no longer overrun a shared
 HubSpot rate budget.
 
-39 new tests land alongside the features (308 total passing).
+38 new tests land alongside the features (307 total passing).
 
 ### Added — migration/operator workflows
 
 - Claude-style operator entrypoints: `hscli /setup`, `/migration`,
-  `/read`, `/fetch` (`/get`), `/write`, and `/guardrails`, with non-slash aliases for
+  `/read`, `/write`, and `/guardrails`, with non-slash aliases for
   shell environments that prefer plain command names.
-- `hscli ui` / `hscli home` terminal home for profile context and
-  operator workflow selection; it now surfaces profile roles,
-  read/write safety state, policy/trace status, API-usage guidance,
-  and a recommended next command.
 - `auth set-hublet <profile> <hublet>` plus global `--hublet` /
   `--api-base-url` routing overrides for explicit EU/AP/NA hublet
   control.
