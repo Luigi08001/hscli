@@ -16,6 +16,7 @@ import {
   parseNumberFlag,
   parseSupportedObjectType,
 } from "../commands/crm/shared.js";
+import { chunkInputs, loadExistingPropertyNames, normalizePropertyBatch, propertyName, type PropertyInput } from "../commands/crm/property-batch.js";
 import {
   resolvePortalContext,
   enrichListResponse,
@@ -334,6 +335,68 @@ export function registerHubSpotTools(server: McpServer): void {
     const objectTypeValue = parseSupportedObjectType(args.objectType, PROPERTY_OBJECT_TYPES, "objectType");
     const objectTypeSegment = encodePathSegment(objectTypeValue, "objectType");
     return maybeWrite(ctx, client, "POST", `/crm/v3/properties/${objectTypeSegment}`, args.data);
+  }));
+
+  registerMcpTool(server,"crm_properties_batch_create", {
+    description: "Batch-create properties for a standard object or custom object type ID (dry-run by default unless force=true)",
+    inputSchema: {
+      ...baseArgsSchema,
+      objectType: z.string().min(1).describe("Object type name (contacts, companies, deals, tickets) or custom object type ID (e.g. 2-123456)"),
+      inputs: z.array(z.record(z.string(), z.unknown())).min(1),
+      chunkSize: z.number().int().positive().default(100),
+      skipExisting: z.boolean().optional(),
+      includeReadonly: z.boolean().optional(),
+    },
+  }, (args: McpBaseArgs & {
+    objectType: string;
+    inputs: PropertyInput[];
+    chunkSize?: number;
+    skipExisting?: boolean;
+    includeReadonly?: boolean;
+  }) => executeTool(args, async (ctx, client) => {
+    const objectTypeSegment = encodePathSegment(args.objectType, "objectType");
+    const path = `/crm/v3/properties/${objectTypeSegment}/batch/create`;
+    const chunkSize = parseNumberFlag(String(args.chunkSize ?? 100), "chunkSize");
+    const normalized = normalizePropertyBatch(args.inputs, Boolean(args.includeReadonly));
+
+    let inputs = normalized.inputs;
+    const skippedExisting: string[] = [];
+    if (args.skipExisting && inputs.length > 0) {
+      const existing = await loadExistingPropertyNames(client, objectTypeSegment);
+      inputs = inputs.filter((input) => {
+        const name = propertyName(input, "");
+        const exists = name !== "" && existing.has(name);
+        if (exists) skippedExisting.push(name);
+        return !exists;
+      });
+    }
+
+    const chunks = chunkInputs(inputs, chunkSize);
+    const summary = {
+      objectType: args.objectType,
+      endpoint: path,
+      totalInput: normalized.rawInputs.length,
+      requested: inputs.length,
+      skippedReadonly: normalized.skippedReadonly,
+      skippedExisting,
+      chunkSize,
+      chunks: chunks.map((chunk, index) => ({
+        index: index + 1,
+        count: chunk.length,
+        names: chunk.slice(0, 10).map((input, inputIndex) => propertyName(input, `<chunk:${index + 1}:${inputIndex}>`)),
+      })),
+      previewInputs: inputs.slice(0, 3),
+    };
+
+    if (ctx.dryRun) return { dryRun: true, method: "POST", path, ...summary };
+    if (inputs.length === 0) return { ...summary, responses: [], noOp: true };
+
+    const responses = [];
+    for (const [index, chunk] of chunks.entries()) {
+      const response = await maybeWrite(ctx, client, "POST", path, { inputs: chunk });
+      responses.push({ index: index + 1, count: chunk.length, response });
+    }
+    return { ...summary, responses };
   }));
 
   registerMcpTool(server,"crm_properties_update", {

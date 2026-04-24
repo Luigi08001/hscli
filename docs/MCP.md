@@ -138,6 +138,7 @@ If your client accepts env vars, set:
 - `crm_properties_list`
 - `crm_properties_get`
 - `crm_properties_create` *(write, dry-run by default)*
+- `crm_properties_batch_create` *(write, dry-run by default; supports custom object type IDs)*
 - `crm_properties_update` *(write, dry-run by default)*
 
 ### Associations

@@ -43,7 +43,7 @@ All five types: `hscli crm engagements {type} create|get|update|delete|list` plu
 
 | Job | Command | Status |
 |---|---|---|
-| Property CRUD + enum edits | `hscli crm properties create|update|delete|list|get` | ✅ |
+| Property CRUD + enum edits | `hscli crm properties create|batch-create|update|delete|list|get` | ✅ |
 | Property groups | `hscli crm properties groups create|list|update|delete` | ✅ |
 | Schema description | `hscli crm describe <objectType>` | ✅ |
 | Pre-flight payload validation | `hscli crm validate <objectType> --data '{...}'` | ✅ |

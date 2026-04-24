@@ -274,6 +274,122 @@ describe("hscli", () => {
     expect(errSpy.mock.calls.some((c) => String(c[0]).includes("UNSUPPORTED_OBJECT_TYPE"))).toBe(true);
   });
 
+  it("batch-creates properties from list dumps for custom objects in dry-run mode", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "--dry-run",
+      "crm",
+      "properties",
+      "batch-create",
+      "2-123456",
+      "--data",
+      JSON.stringify({
+        ok: true,
+        data: {
+          results: [
+            {
+              name: "rentokil_region",
+              label: "Rentokil Region",
+              type: "string",
+              fieldType: "text",
+              groupName: "customobjectinformation",
+              createdAt: "2026-01-01T00:00:00.000Z",
+              modificationMetadata: { readOnlyDefinition: false },
+              hubspotDefined: false,
+            },
+            {
+              name: "hs_object_id",
+              label: "Record ID",
+              type: "number",
+              fieldType: "number",
+              hubspotDefined: true,
+              modificationMetadata: { readOnlyDefinition: true },
+            },
+          ],
+        },
+      }),
+    ]);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data.path).toBe("/crm/v3/properties/2-123456/batch/create");
+    expect(output.data.totalInput).toBe(2);
+    expect(output.data.requested).toBe(1);
+    expect(output.data.skippedReadonly).toEqual(["hs_object_id"]);
+    expect(output.data.previewInputs[0]).toEqual({
+      name: "rentokil_region",
+      label: "Rentokil Region",
+      type: "string",
+      fieldType: "text",
+      groupName: "customobjectinformation",
+    });
+  });
+
+  it("batch-creates properties from @file payloads and skips existing names", async () => {
+    const home = setupHomeWithToken();
+    process.env.HOME = home;
+    const payloadPath = join(home, "properties.json");
+    writeFileSync(payloadPath, JSON.stringify([
+      { name: "existing_prop", label: "Existing prop", type: "string", fieldType: "text" },
+      { name: "new_prop", label: "New prop", type: "string", fieldType: "text" },
+    ]), "utf8");
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchSpy = vi.spyOn(global, "fetch" as never).mockImplementation(async (_url: unknown, init?: unknown) => {
+      const method = (init as { method?: string } | undefined)?.method ?? "GET";
+      if (method === "GET") {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ results: [{ name: "existing_prop" }] }),
+          headers: new Headers(),
+        } as never;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ results: [{ name: "new_prop" }] }),
+        headers: new Headers(),
+      } as never;
+    });
+
+    const { run } = await import("../src/cli.js");
+    await run([
+      "node",
+      "hscli",
+      "--json",
+      "--force",
+      "crm",
+      "properties",
+      "batch-create",
+      "contacts",
+      "--skip-existing",
+      "--chunk-size",
+      "1",
+      "--data",
+      `@${payloadPath}`,
+    ]);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const [listUrl] = fetchSpy.mock.calls[0];
+    const [postUrl, postInit] = fetchSpy.mock.calls[1];
+    expect(String(listUrl)).toContain("/crm/v3/properties/contacts");
+    expect(String(postUrl)).toContain("/crm/v3/properties/contacts/batch/create");
+    expect(JSON.parse(String((postInit as { body?: string }).body))).toEqual({
+      inputs: [{ name: "new_prop", label: "New prop", type: "string", fieldType: "text" }],
+    });
+    const output = JSON.parse(String(logSpy.mock.calls[0][0]));
+    expect(output.data.skippedExisting).toEqual(["existing_prop"]);
+    expect(output.data.requested).toBe(1);
+  });
+
   it("rejects unsupported pipeline objectType", async () => {
     const home = setupHomeWithToken();
     process.env.HOME = home;

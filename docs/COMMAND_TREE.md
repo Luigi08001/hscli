@@ -44,7 +44,7 @@ Objects:
 - `hscli crm engagements (notes|calls|tasks|emails|meetings) list|get|create|update|delete`
 
 Properties + pipelines + associations:
-- `hscli crm properties list|get|create|update|delete` + `hscli crm properties groups list|create|update|delete`
+- `hscli crm properties list|get|create|batch-create|update|delete` + `hscli crm properties groups list|create|update|delete`
 - `hscli crm pipelines list|get|create|update|delete` + `hscli crm pipelines stages create|update|delete`
 - `hscli crm associations list|get|create|delete`
 - `hscli crm owners list|get`

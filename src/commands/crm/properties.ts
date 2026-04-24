@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { createClient } from "../../core/http.js";
 import type { CliContext } from "../../core/output.js";
 import { printResult } from "../../core/output.js";
+import { chunkInputs, loadExistingPropertyNames, normalizePropertyBatch, propertyName, readPropertyInputs } from "./property-batch.js";
 import { PROPERTY_OBJECT_TYPES, encodePathSegment, maybeWrite, parseJsonPayload, parseNumberFlag, parseSupportedObjectType } from "./shared.js";
 
 export function registerProperties(crm: Command, getCtx: () => CliContext): void {
@@ -35,6 +36,70 @@ export function registerProperties(crm: Command, getCtx: () => CliContext): void
     const res = await maybeWrite(ctx, client, "POST", `/crm/v3/properties/${objectTypeSegment}`, payload);
     printResult(ctx, res);
   });
+
+  properties
+    .command("batch-create")
+    .description("Create properties in batches; accepts arrays, { inputs }, or properties list dumps with { results }")
+    .argument("<objectType>")
+    .requiredOption("--data <payload>", "Batch payload JSON, @file, array, { inputs }, or { results } dump")
+    .option("--chunk-size <n>", "Properties per batch request", "100")
+    .option("--skip-existing", "Fetch existing sandbox properties and skip matching names")
+    .option("--include-readonly", "Do not skip hubspotDefined/readOnlyDefinition properties")
+    .action(async (objectType, opts) => {
+      const ctx = getCtx();
+      const client = createClient(ctx.profile);
+      const objectTypeSegment = encodePathSegment(objectType, "objectType");
+      const path = `/crm/v3/properties/${objectTypeSegment}/batch/create`;
+      const chunkSize = parseNumberFlag(opts.chunkSize, "--chunk-size");
+      const rawInputs = readPropertyInputs(opts.data);
+      const { inputs: writableInputs, skippedReadonly } = normalizePropertyBatch(rawInputs, Boolean(opts.includeReadonly));
+
+      let inputs = writableInputs;
+      const skippedExisting: string[] = [];
+      if (opts.skipExisting && writableInputs.length > 0) {
+        const existing = await loadExistingPropertyNames(client, objectTypeSegment);
+        inputs = writableInputs.filter((input) => {
+          const name = propertyName(input, "");
+          const exists = name !== "" && existing.has(name);
+          if (exists) skippedExisting.push(name);
+          return !exists;
+        });
+      }
+
+      const chunks = chunkInputs(inputs, chunkSize);
+      const summary = {
+        objectType,
+        endpoint: path,
+        totalInput: rawInputs.length,
+        requested: inputs.length,
+        skippedReadonly,
+        skippedExisting,
+        chunkSize,
+        chunks: chunks.map((chunk, index) => ({
+          index: index + 1,
+          count: chunk.length,
+          names: chunk.slice(0, 10).map((input, inputIndex) => propertyName(input, `<chunk:${index + 1}:${inputIndex}>`)),
+        })),
+        previewInputs: inputs.slice(0, 3),
+      };
+
+      if (ctx.dryRun) {
+        printResult(ctx, { dryRun: true, method: "POST", path, ...summary });
+        return;
+      }
+
+      if (inputs.length === 0) {
+        printResult(ctx, { ...summary, responses: [], noOp: true });
+        return;
+      }
+
+      const responses = [];
+      for (const [index, chunk] of chunks.entries()) {
+        const res = await maybeWrite(ctx, client, "POST", path, { inputs: chunk });
+        responses.push({ index: index + 1, count: chunk.length, response: res });
+      }
+      printResult(ctx, { ...summary, responses });
+    });
 
   properties
     .command("update")

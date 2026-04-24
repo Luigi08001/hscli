@@ -302,6 +302,27 @@ hscli crm properties create contacts --force \
   --data '{"name":"preferred_language","label":"Preferred Language","type":"enumeration","fieldType":"select","groupName":"contactinformation","options":[{"label":"English","value":"en"},{"label":"Spanish","value":"es"},{"label":"French","value":"fr"}]}'
 ```
 
+### Batch-create properties from a sandbox export
+
+```bash
+hscli --json crm properties list contacts > contacts-properties.json
+
+hscli --dry-run crm properties batch-create contacts \
+  --skip-existing \
+  --data @contacts-properties.json
+
+hscli --force crm properties batch-create contacts \
+  --skip-existing \
+  --data @contacts-properties.json
+```
+
+For custom objects, pass the object type ID directly:
+
+```bash
+hscli --force crm properties batch-create 2-123456 \
+  --data '{"inputs":[{"name":"migration_region","label":"Migration Region","type":"string","fieldType":"text","groupName":"customobjectinformation"}]}'
+```
+
 ### Update a property label
 
 ```bash

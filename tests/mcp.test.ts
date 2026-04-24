@@ -68,7 +68,7 @@ describe("mcp server", () => {
       "crm_deals_list", "crm_deals_search",
       "crm_tickets_list", "crm_tickets_delete",
       "crm_properties_list", "crm_properties_get",
-      "crm_properties_create", "crm_properties_update",
+      "crm_properties_create", "crm_properties_batch_create", "crm_properties_update",
       "crm_associations_list", "crm_associations_create", "crm_associations_remove",
       "crm_owners_list",
       "crm_pipelines_list", "crm_pipelines_get",
@@ -347,6 +347,55 @@ describe("mcp server", () => {
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(result.structuredContent).toMatchObject({ dryRun: true });
+  });
+
+  it("properties batch create supports custom object IDs in dry-run mode", async () => {
+    setupHomeWithToken();
+    const mock = new MockMcpServer();
+    registerHubSpotTools(mock as any);
+    const fetchSpy = vi.spyOn(global, "fetch" as never);
+
+    const result = await mock.tools.get("crm_properties_batch_create")!({
+      objectType: "2-123456",
+      inputs: [
+        {
+          name: "migration_region",
+          label: "Migration Region",
+          type: "string",
+          fieldType: "text",
+          groupName: "customobjectinformation",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          hubspotDefined: false,
+        },
+        {
+          name: "hs_object_id",
+          label: "Record ID",
+          type: "number",
+          fieldType: "number",
+          hubspotDefined: true,
+          modificationMetadata: { readOnlyDefinition: true },
+        },
+      ],
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(result.structuredContent).toMatchObject({
+      dryRun: true,
+      method: "POST",
+      path: "/crm/v3/properties/2-123456/batch/create",
+      totalInput: 2,
+      requested: 1,
+      skippedReadonly: ["hs_object_id"],
+    });
+    expect(result.structuredContent.previewInputs).toEqual([
+      {
+        name: "migration_region",
+        label: "Migration Region",
+        type: "string",
+        fieldType: "text",
+        groupName: "customobjectinformation",
+      },
+    ]);
   });
 
   it("imports create defaults to dry-run", async () => {
