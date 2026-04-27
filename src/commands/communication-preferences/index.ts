@@ -51,9 +51,9 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
       if (opts.skipExisting) {
         const name = typeof payload.name === "string" ? payload.name : undefined;
         if (!name) throw new CliError("INVALID_PAYLOAD", "--skip-existing requires payload.name");
-        const existing = await findExistingDefinitionByName(client, name);
+        const existing = await findExistingDefinition(client, payload);
         if (existing) {
-          printResult(ctx, { skipped: true, reason: "subscription-definition-exists", existing });
+          printResult(ctx, { skipped: true, reason: "subscription-definition-exists", matchKey: "name+purpose+communicationMethod+businessUnitId", existing });
           return;
         }
       }
@@ -199,12 +199,19 @@ function normalizeSubscriptionDefinitionPayload(
   );
 }
 
-async function findExistingDefinitionByName(
+async function findExistingDefinition(
   client: ReturnType<typeof createClient>,
-  name: string,
+  payload: Record<string, unknown>,
 ): Promise<Record<string, unknown> | undefined> {
   const res = await client.request("/communication-preferences/v3/definitions");
-  return extractDefinitionRecords(res).find((record) => record.name === name);
+  const name = typeof payload.name === "string" ? payload.name : undefined;
+  if (!name) return undefined;
+  const candidates = extractDefinitionRecords(res).filter((record) => record.name === name);
+  if (candidates.length === 0) return undefined;
+  const exact = candidates.find((record) => isSameSubscriptionDefinition(record, payload));
+  if (exact) return exact;
+  if (candidates.length === 1 && !hasSubscriptionDisambiguators(payload)) return candidates[0];
+  return undefined;
 }
 
 function extractDefinitionRecords(raw: unknown): Array<Record<string, unknown>> {
@@ -230,4 +237,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function toHubSpotIdValue(raw: string): string | number {
   const numeric = Number(raw);
   return Number.isSafeInteger(numeric) && String(numeric) === raw ? numeric : raw;
+}
+
+function isSameSubscriptionDefinition(record: Record<string, unknown>, payload: Record<string, unknown>): boolean {
+  if (record.name !== payload.name) return false;
+  if (normalizeBusinessUnitId(record.businessUnitId) !== normalizeBusinessUnitId(payload.businessUnitId)) return false;
+  if (hasText(payload.purpose) && normalizeText(record.purpose) !== normalizeText(payload.purpose)) return false;
+  if (hasText(payload.communicationMethod) && normalizeText(record.communicationMethod) !== normalizeText(payload.communicationMethod)) return false;
+  return true;
+}
+
+function hasSubscriptionDisambiguators(payload: Record<string, unknown>): boolean {
+  return payload.businessUnitId !== undefined || hasText(payload.purpose) || hasText(payload.communicationMethod);
+}
+
+function normalizeBusinessUnitId(value: unknown): string {
+  return stringifyId(value) ?? "0";
+}
+
+function hasText(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function normalizeText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }

@@ -20,6 +20,8 @@
   Migration tooling must match definitions by
   `name + purpose/process + communicationMethod/channel + businessUnitId`, not
   by name alone, and remap business-unit IDs before write.
+- `communication-preferences definitions create --skip-existing` now uses that
+  composite match instead of skipping by name alone.
 
 ## 0.8.12 - 2026-04-24
 
