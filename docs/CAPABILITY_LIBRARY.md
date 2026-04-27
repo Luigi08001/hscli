@@ -170,6 +170,9 @@ All readable + writable via standard CRM endpoints:
 
 - `hscli marketing subscriptions subscription-types` ✅
 - `hscli communication-preferences subscribe|unsubscribe|status` ✅
+- Subscription definition public reads ✅ via `/communication-preferences/v3/definitions` and `/communication-preferences/v4/definitions`.
+- Subscription definition public creates ❌ — `POST /communication-preferences/v3/definitions` and `POST /communication-preferences/v4/definitions` returned HTTP 405 during Rentokil sandbox migration testing.
+- Email subscription type creation is possible through browser-session/internal `/api/subscriptions/v1/definitions?portalId=<portalId>`; this should be treated as an internal migration path with portal guards, composite idempotency, and BU remapping.
 - GDPR-compliant consent management ✅
 
 ---

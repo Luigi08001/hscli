@@ -106,7 +106,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
       const ctx = getCtx();
       const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
-      const res = await client.request("/communication/preferences/v4/statuses/batch-read", { method: "POST", body: payload });
+      const res = await client.request("/communication-preferences/v4/statuses/batch/read", { method: "POST", body: payload });
       printResult(ctx, res);
     });
   v4.command("status-update-batch")
@@ -116,7 +116,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
       const ctx = getCtx();
       const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
-      const res = await maybeWrite(ctx, client, "POST", "/communication/preferences/v4/statuses/batch-update", payload);
+      const res = await maybeWrite(ctx, client, "POST", "/communication-preferences/v4/statuses/batch/write", payload);
       printResult(ctx, res);
     });
   v4.command("subscribe-batch")
@@ -126,7 +126,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
       const ctx = getCtx();
       const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
-      const res = await maybeWrite(ctx, client, "POST", "/communication/preferences/v4/subscribe-batch", payload);
+      const res = await maybeWrite(ctx, client, "POST", "/communication-preferences/v4/statuses/batch/write", payload);
       printResult(ctx, res);
     });
   v4.command("unsubscribe-batch")
@@ -136,7 +136,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
       const ctx = getCtx();
       const client = createClient(ctx.profile);
       const payload = parseJsonPayload(opts.data);
-      const res = await maybeWrite(ctx, client, "POST", "/communication/preferences/v4/unsubscribe-batch", payload);
+      const res = await maybeWrite(ctx, client, "POST", "/communication-preferences/v4/statuses/batch/write", payload);
       printResult(ctx, res);
     });
   v4.command("subscriptions-list")
@@ -144,7 +144,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .action(async () => {
       const ctx = getCtx();
       const client = createClient(ctx.profile);
-      const res = await client.request("/communication/preferences/v4/subscriptions");
+      const res = await client.request("/communication-preferences/v4/definitions");
       printResult(ctx, res);
     });
   v4.command("channels-list")
@@ -152,7 +152,7 @@ export function registerCommunicationPreferences(program: Command, getCtx: () =>
     .action(async () => {
       const ctx = getCtx();
       const client = createClient(ctx.profile);
-      const res = await client.request("/communication/preferences/v4/channels");
+      const res = await client.request("/communication-preferences/v4/channels");
       printResult(ctx, res);
     });
 }

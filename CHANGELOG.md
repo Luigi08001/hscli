@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Fixed — communication preferences v4 paths
+
+- Corrected `communication-preferences v4` endpoints to use HubSpot's
+  documented `/communication-preferences/v4/...` path. `subscriptions-list`
+  now reads `/communication-preferences/v4/definitions`.
+
+### Discovered — subscription definition migration
+
+- Public subscription definition reads work via
+  `GET /communication-preferences/v3/definitions` and
+  `GET /communication-preferences/v4/definitions`, but public creates return
+  HTTP 405 on `/communication-preferences/v3/definitions` and
+  `/communication-preferences/v4/definitions`.
+- Browser-session replay for Email > Subscription Types uses the internal
+  endpoint `/api/subscriptions/v1/definitions?portalId=<portalId>`.
+  Migration tooling must match definitions by
+  `name + purpose/process + communicationMethod/channel + businessUnitId`, not
+  by name alone, and remap business-unit IDs before write.
+
 ## 0.8.12 - 2026-04-24
 
 **Terminal operator home + `/fetch` alias.** Two incremental adds on

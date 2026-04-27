@@ -234,6 +234,15 @@ hscli forms create --source-format v2 --subscription-type-map ./id-maps/subscrip
 
 > **API:** `forms` scope. Full CRUD on forms including field configuration. Legacy forms/v2 payloads are auto-translated on create/update when detected; use `hscli forms translate-v2` to inspect the v3 payload before replay. During real writes, hscli preflights target CRM properties, skips missing fields by default, auto-splits field groups to HubSpot's 3-field v3 limit, and requires `--subscription-type-map` when legacy consent metadata references source subscription IDs.
 
+> **Subscription definition migration note:** Public APIs can read subscription
+> definitions (`/communication-preferences/v3/definitions` and
+> `/communication-preferences/v4/definitions`), but public create returned HTTP
+> 405 during cross-portal migration testing. HubSpot's Email > Subscription
+> Types UI writes through internal `/api/subscriptions/v1/definitions`. When
+> using a browser-session migration helper, match by
+> `name + purpose/process + communicationMethod/channel + businessUnitId` and
+> remap business units before write.
+
 ---
 
 ## 6. Ads
