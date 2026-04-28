@@ -725,14 +725,21 @@ describe("hscli", () => {
     expect(output.data.body.id).toBeUndefined();
   });
 
-  it("skips existing subscription definitions by name", async () => {
+  it("skips existing subscription definitions by composite key", async () => {
     const home = setupHomeWithToken();
     process.env.HOME = home;
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const fetchSpy = vi.spyOn(global, "fetch" as never).mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ results: [{ id: "def-1", name: "Newsletter" }] }),
+      json: async () => ({
+        results: [{
+          id: "def-1",
+          name: "Newsletter",
+          purpose: "Marketing",
+          communicationMethod: "Email",
+        }],
+      }),
       headers: new Headers(),
     } as never);
 
